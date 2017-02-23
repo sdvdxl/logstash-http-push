@@ -1,6 +1,7 @@
 package log
 
 import (
+	"fmt"
 	l "log"
 	"os"
 )
@@ -16,25 +17,26 @@ var (
 
 // Fatal Fatal
 func Fatal(msg ...interface{}) {
-	fatalLog.Fatal(msg...)
+	fatalLog.Output(2, fmt.Sprint(msg))
+	fatalLog.Fatalln("application exit now")
 }
 
 // Error Error
 func Error(msg ...interface{}) {
-	errLog.Println(msg...)
+	errLog.Output(2, fmt.Sprint(msg))
 }
 
 // Warn Warn
 func Warn(msg ...interface{}) {
-	warnLog.Println(msg...)
+	warnLog.Output(2, fmt.Sprint(msg))
 }
 
 // Info  Info
 func Info(msg ...interface{}) {
-	infoLog.Println(msg...)
+	infoLog.Output(2, fmt.Sprint(msg))
 }
 
 // Debug Debug
 func Debug(msg ...interface{}) {
-	debugLog.Println(msg...)
+	debugLog.Output(2, fmt.Sprint(msg))
 }

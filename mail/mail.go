@@ -20,7 +20,7 @@ type Email struct {
 
 // SendEmail 发送邮件
 func SendEmail(email Email) error {
-	log.Info("will send mail...")
+	log.Info("sendding mail...")
 	mailInfo := email.MailInfo
 	m := gomail.NewMessage()
 	m.SetHeader("From", mailInfo.Sender)

@@ -8,6 +8,8 @@ import (
 
 	"strings"
 
+	"regexp"
+
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -25,9 +27,11 @@ func Get() *Config {
 
 // Config 配置文件
 type Config struct {
+	Negate    bool     `json:"negate"`  //是否取反
+	Match     string   `json:"match"`   // 匹配的正则字符串
 	Address   string   `json:"address"` //web 服务地址 ":5678"
 	LogLevel  string   `json:"logLevel"`
-	MaxPerDay uint8    `json:"maxPerDay"` //一天最大告警次数
+	MaxPerDay uint64   `json:"maxPerDay"` //一天最大告警次数
 	Filters   []Filter `json:"filters"`
 	Mail      MailInfo `json:"mail"`
 }
@@ -54,12 +58,13 @@ func Load() error {
 		return err
 	}
 
-	if err := json.Unmarshal(bytes, &cfg); err != nil {
+	var c Config
+	if err := json.Unmarshal(bytes, &c); err != nil {
 		return err
 	}
 
 	// 检查配置项目
-	filters := cfg.Filters
+	filters := c.Filters
 	for i, v := range filters {
 		if v.Level == "" {
 			filters[i].Level = "ERROR"
@@ -68,8 +73,13 @@ func Load() error {
 		}
 	}
 
-	configJSONText, _ := json.Marshal(cfg)
+	if _, err = regexp.Compile(c.Match); err != nil {
+		return err
+	}
+
+	configJSONText, _ := json.Marshal(c)
 	log.Info("config init success, config:", string(configJSONText))
+	cfg = &c
 	return nil
 }
 
@@ -87,6 +97,7 @@ func (cfg Config) WatchConfigFileStatus() chan bool {
 		for {
 			select {
 			case event := <-watcher.Events:
+				log.Debug(event)
 				if event.Name == configFile && event.Op != fsnotify.Chmod { //&& (event.Op == fsnotify.Chmod || event.Op == fsnotify.Rename || event.Op == fsnotify.Write || event.Op == fsnotify.Create)
 					log.Info("modified config file", event.Name, "will reaload config")
 					if err := Load(); err != nil {
