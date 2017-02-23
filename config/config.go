@@ -114,7 +114,7 @@ func (cfg Config) WatchConfigFileStatus() chan bool {
 		}
 	}()
 
-	err = watcher.Add(".")
+	err = watcher.Add("cfg.json")
 	if err != nil {
 		log.Fatal(err)
 	}
