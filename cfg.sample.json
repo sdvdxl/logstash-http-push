@@ -2,6 +2,10 @@
     "address": "0.0.0.0:5678",
     "logLevel": "DEBUG",
     "maxPerDay": 3,
+    "match": "\\d{4}(\\-\\d{2}){2}T(\\d{2}:){2}\\d{2}\\.\\d{3}\\+\\d+\\s+\\w+\\s+\\[[\\w\\-]+\\]\\s+",
+    "negate": true,
+    "sendEmail": false,
+    "timeZone": 8,
     "mail": {
         "smtp": "smtp.xxx.com",
         "port": 25,

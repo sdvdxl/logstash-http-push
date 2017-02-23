@@ -117,6 +117,8 @@ func checkLogMessage(cfg config.Config, message string) uint64 {
 		return 0
 	}
 
+	logData.Timestamp = logData.Timestamp.Add(time.Hour * time.Duration(cfg.TimeZone))
+
 	// 检查每个filter
 	for _, v := range cfg.Filters {
 		if v.Level != strings.ToUpper(logData.Level) {
@@ -139,7 +141,10 @@ func checkLogMessage(cfg config.Config, message string) uint64 {
 						if count >= cfg.MaxPerDay {
 							return count + 1
 						}
-						go sendEmail(cfg, v, logData)
+
+						if cfg.IsSendEmail {
+							go sendEmail(cfg, v, logData)
+						}
 						return count + 1
 					}
 				}

@@ -27,13 +27,15 @@ func Get() *Config {
 
 // Config 配置文件
 type Config struct {
-	Negate    bool     `json:"negate"`  //是否取反
-	Match     string   `json:"match"`   // 匹配的正则字符串
-	Address   string   `json:"address"` //web 服务地址 ":5678"
-	LogLevel  string   `json:"logLevel"`
-	MaxPerDay uint64   `json:"maxPerDay"` //一天最大告警次数
-	Filters   []Filter `json:"filters"`
-	Mail      MailInfo `json:"mail"`
+	Negate      bool     `json:"negate"`  //是否取反
+	Match       string   `json:"match"`   // 匹配的正则字符串
+	Address     string   `json:"address"` //web 服务地址 ":5678"
+	LogLevel    string   `json:"logLevel"`
+	MaxPerDay   uint64   `json:"maxPerDay"` //一天最大告警次数
+	Filters     []Filter `json:"filters"`
+	Mail        MailInfo `json:"mail"`
+	IsSendEmail bool     `json:"sendEmail"` // true 发送
+	TimeZone    int8     `json:"timeZone"`  //时区，如果时间有偏移则加上时区，否则设置为0即可
 }
 
 // MailInfo 邮件信息
