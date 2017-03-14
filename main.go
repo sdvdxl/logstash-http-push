@@ -9,6 +9,8 @@ import (
 
 	"github.com/log-dog/logstash-http-push/log"
 
+	"github.com/sdvdxl/dinghook"
+
 	"strings"
 
 	"fmt"
@@ -29,6 +31,7 @@ var (
 	lastDay      = time.Now().Day()
 	alarmInfo    = &AlarmInfo{}
 	messageRegex *regexp.Regexp
+	ding         *dinghook.DingQueue
 )
 
 // AlarmInfo 告警记录
@@ -68,6 +71,7 @@ func (a *AlarmInfo) Reset() {
 
 func init() {
 	alarmInfo.alarmInfoMap = make(map[string]uint64)
+	ding = &dinghook.DingQueue{Interval: 3, Limit: 3, Title: "有 mongodb 错误", AccessToken: ""}
 }
 
 func main() {
@@ -103,6 +107,8 @@ func main() {
 		writer.Write([]byte(fmt.Sprint(matchCount)))
 	})
 
+	ding.Init()
+	go ding.Start()
 	log.Info("listening on ", cfg.Address)
 	if err := http.ListenAndServe(cfg.Address, nil); err != nil {
 		log.Fatal(err)
@@ -118,6 +124,11 @@ func checkLogMessage(cfg config.Config, message string) uint64 {
 	}
 
 	logData.Timestamp = logData.Timestamp.Add(time.Hour * time.Duration(cfg.TimeZone))
+
+	// 如果是mongo相关，发送到钉钉
+	if strings.Contains(logData.Message, "mongodb") {
+		ding.Push("```" + logData.Message + "```")
+	}
 
 	// 检查每个filter
 	for _, v := range cfg.Filters {
