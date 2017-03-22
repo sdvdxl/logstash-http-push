@@ -52,8 +52,8 @@ func (a *AlarmInfo) GetValues() map[string]uint64 {
 	return r
 }
 
-// GetAndAnd 获取并且加1
-func (a *AlarmInfo) GetAndAnd(key string) uint64 {
+// GetAndAd 获取并且加1
+func (a *AlarmInfo) GetAndAd(key string) uint64 {
 	defer a.lock.Unlock()
 	a.lock.Lock()
 	c := a.alarmInfoMap[key]
@@ -71,7 +71,7 @@ func (a *AlarmInfo) Reset() {
 
 func init() {
 	alarmInfo.alarmInfoMap = make(map[string]uint64)
-	ding = &dinghook.DingQueue{Interval: 3, Limit: 3, Title: "有 mongodb 错误", AccessToken: ""}
+	ding = &dinghook.DingQueue{Interval: 3, Limit: 1, Title: "【告警】", AccessToken: "91b35169899bc96e9648b2b8f4208ca56b6f84e14b137ba2b178e0cde9453817"}
 }
 
 func main() {
@@ -126,9 +126,18 @@ func checkLogMessage(cfg config.Config, message string) uint64 {
 	logData.Timestamp = logData.Timestamp.Add(time.Hour * time.Duration(cfg.TimeZone))
 
 	// 如果是mongo相关，发送到钉钉
-	if strings.Contains(logData.Message, "mongodb") {
-		ding.Push("```" + logData.Message + "```")
-	}
+	go func() {
+		msg := logData.Message
+		if strings.Contains(msg, "mongodb") || strings.Contains(msg, "AmqpConnectException") {
+			idx := strings.Index(msg, " at")
+
+			if idx > 0 {
+				msg = msg[:idx]
+			}
+			title := logData.Source[strings.Index(logData.Source, "/data/logs")+1 : strings.Index(logData.Source, ".")]
+			ding.PushMessage(dinghook.SimpleMessage{Title: title, Content: title + " \n\n " + msg})
+		}
+	}()
 
 	// 检查每个filter
 	for _, v := range cfg.Filters {
@@ -148,7 +157,7 @@ func checkLogMessage(cfg config.Config, message string) uint64 {
 						now := time.Now()
 						key := base64.RawStdEncoding.EncodeToString([]byte(fmt.Sprint(now.Day()) + logData.Host + "\n" + logData.Source + "\n" + getMatchMessage(cfg, logData.Message)))
 
-						count := alarmInfo.GetAndAnd(key)
+						count := alarmInfo.GetAndAd(key)
 						if count >= cfg.MaxPerDay {
 							return count + 1
 						}
