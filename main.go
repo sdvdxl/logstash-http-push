@@ -234,21 +234,27 @@ func sendEmail(cfg config.Config, filter config.Filter, logData logstash.LogData
 
 	subject := fmt.Sprintf("❌ %v\t time: %v", title, logData.Timestamp)
 	mailInfo := mail.GetMail(cfg)
+	sendSuccess := false
+	ding := getDing(filter)
 	for _ = range cfg.Mails { // 如果失败，循环发送，直到配置的所有邮箱有成功的，或者全部失败
 		email := mail.Email{MailInfo: mailInfo, Subject: subject, Data: logData, MailTemplate: "log.html", ToPersion: filter.ToPersion}
 		if err := mail.SendEmail(email); err != nil {
 			errMsg := fmt.Sprint("send email error:", err, "\nto:", filter.ToPersion)
 			log.Error(errMsg)
 			// 发送钉钉，
-			ding := getDing(filter)
 			if ding != nil {
 				ding.Push(errMsg + "\n 切换下一个email尝试发送")
 			}
 			mailInfo = mail.GetNextMail(cfg)
 		} else {
+			sendSuccess = true
 			log.Info("send email success")
 			break
 		}
+	}
+
+	if !sendSuccess && ding != nil {
+		sendDing(filter, logData)
 	}
 
 }
