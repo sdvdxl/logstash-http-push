@@ -84,7 +84,6 @@ func init() {
 }
 
 func main() {
-
 	if err := config.Load(); err != nil {
 		panic(err)
 	}
