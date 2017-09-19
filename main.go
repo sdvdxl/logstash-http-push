@@ -2,37 +2,31 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
-	"sort"
+	"regexp"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
-	"github.com/log-dog/logstash-http-push/log"
-	"github.com/tylerb/graceful"
-
-	"github.com/sdvdxl/dinghook"
-
-	"strings"
-
-	"fmt"
-
-	"encoding/base64"
-
-	"sync"
-
-	"regexp"
-
 	"github.com/log-dog/logstash-http-push/config"
+	"github.com/log-dog/logstash-http-push/log"
 	"github.com/log-dog/logstash-http-push/logstash"
 	"github.com/log-dog/logstash-http-push/mail"
+	"github.com/sdvdxl/dinghook"
+	"github.com/tylerb/graceful"
 )
 
 const (
-	LOG_PREFIX     = "/data/logs/"
-	LOG_PREFIX_LEN = len(LOG_PREFIX)
+	// logPathPrefix 日志路径前缀
+	logPathPrefix    = "/data/logs/"
+	logPathPrefixLen = len(logPathPrefix)
+	splitChar        = "@"
 )
 
 var (
@@ -97,8 +91,7 @@ func main() {
 			ding := &dinghook.DingQueue{Interval: 3, Limit: 1, Title: "【告警】", AccessToken: f.Ding}
 			ding.Init()
 			go ding.Start()
-			sort.Strings(f.Tags)
-			dingMap[strings.Join(f.Tags, "-")] = ding
+			dingMap[strings.Join(f.Tags, splitChar)] = ding
 		}
 	}
 
@@ -149,28 +142,13 @@ func checkLogMessage(cfg config.Config, message string) uint64 {
 
 	logData.Timestamp = logData.Timestamp.Add(time.Hour * time.Duration(cfg.TimeZone))
 
-	// 如果是mongo相关，发送到钉钉
-	go func() {
-		msg := logData.Message
-		if strings.Contains(msg, "mongodb") || strings.Contains(msg, "AmqpConnectException") {
-			idx := strings.Index(msg, " at")
-
-			if idx > 0 {
-				msg = msg[:idx]
-			}
-			title := logData.Source[strings.Index(logData.Source, LOG_PREFIX)+LOG_PREFIX_LEN : strings.Index(logData.Source, ".")]
-			sort.Strings(logData.Tags)
-			ding := dingMap[strings.Join(logData.Tags, "-")]
-			ding.PushMessage(dinghook.SimpleMessage{Title: title, Content: title + " \n\n " + msg})
-		}
-	}()
-
 	// 检查每个filter
 	for _, v := range cfg.Filters {
 		if v.Level != strings.ToUpper(logData.Level) {
 			return 0
 		}
 
+		dingTags := make([]string, 0, 10)
 		// 检查tag
 		count := 0
 		size := len(v.Tags)
@@ -178,7 +156,9 @@ func checkLogMessage(cfg config.Config, message string) uint64 {
 			for _, lt := range logData.Tags {
 				if t == lt {
 					count++
+					dingTags = append(dingTags, t)
 					if count == size {
+
 						// 发送邮件
 						now := time.Now()
 						key := base64.RawStdEncoding.EncodeToString([]byte(fmt.Sprint(now.Day()) + logData.Host + "\n" + logData.Source + "\n" + getMatchMessage(cfg, logData.Message)))
@@ -194,6 +174,9 @@ func checkLogMessage(cfg config.Config, message string) uint64 {
 							}
 						}
 
+						// 发送钉钉
+						go sendDing(v, logData)
+
 						if cfg.IsSendEmail {
 							go sendEmail(cfg, v, logData)
 						}
@@ -204,6 +187,26 @@ func checkLogMessage(cfg config.Config, message string) uint64 {
 		}
 	}
 	return 0
+}
+
+func getDing(filter config.Filter) *dinghook.DingQueue {
+	return dingMap[strings.Join(filter.Tags, splitChar)]
+}
+
+func sendDing(filter config.Filter, logData logstash.LogData) {
+	msg := logData.Message
+	if strings.Contains(msg, "mongodb") || strings.Contains(msg, "AmqpConnectException") {
+		idx := strings.Index(msg, " at")
+
+		if idx > 0 {
+			msg = msg[:idx]
+		}
+		title := logData.Source[strings.Index(logData.Source, logPathPrefix)+logPathPrefixLen : strings.Index(logData.Source, ".")]
+		ding := getDing(filter)
+		if ding != nil {
+			ding.PushMessage(dinghook.SimpleMessage{Title: title, Content: title + " \n\n " + msg})
+		}
+	}
 }
 
 func cleanAlarmInfo() {
@@ -227,14 +230,25 @@ func cleanAlarmInfo() {
 }
 
 func sendEmail(cfg config.Config, filter config.Filter, logData logstash.LogData) {
-	title := logData.Source[strings.Index(logData.Source, LOG_PREFIX)+LOG_PREFIX_LEN : strings.Index(logData.Source, ".")]
+	title := logData.Source[strings.Index(logData.Source, logPathPrefix)+logPathPrefixLen : strings.Index(logData.Source, ".")]
 
 	subject := fmt.Sprintf("❌ %v\t time: %v", title, logData.Timestamp)
-	email := mail.Email{MailInfo: cfg.Mail, Subject: subject, Data: logData, MailTemplate: "log.html", ToPersion: filter.ToPersion}
-	if err := mail.SendEmail(email); err != nil {
-		log.Error("send email error:", err, "\nto:", filter.ToPersion)
-	} else {
-		log.Info("send email success")
+	mailInfo := mail.GetMail(cfg)
+	for _ = range cfg.Mails { // 如果失败，循环发送，直到配置的所有邮箱有成功的，或者全部失败
+		email := mail.Email{MailInfo: mailInfo, Subject: subject, Data: logData, MailTemplate: "log.html", ToPersion: filter.ToPersion}
+		if err := mail.SendEmail(email); err != nil {
+			errMsg := fmt.Sprint("send email error:", err, "\nto:", filter.ToPersion)
+			log.Error(errMsg)
+			// 发送钉钉，
+			ding := getDing(filter)
+			if ding != nil {
+				ding.Push(errMsg + "\n 切换下一个email尝试发送")
+			}
+			mailInfo = mail.GetNextMail(cfg)
+		} else {
+			log.Info("send email success")
+			break
+		}
 	}
 
 }
