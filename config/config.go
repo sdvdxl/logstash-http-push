@@ -51,6 +51,8 @@ type Filter struct {
 	Level     string   `json:"level"`
 	Tags      []string `json:"tags"`
 	ToPersion []string `json:"toPersion"` // 邮件要发送的人
+	Ignores   []string `json:"ignores"`   // 忽略匹配的内容
+	Ding      string   `json:"ding"`      // 钉钉 机器人token
 }
 
 // Load 读取配置文件

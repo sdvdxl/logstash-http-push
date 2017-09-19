@@ -15,6 +15,8 @@
     "filters": [{
         "level": "ERROR",
         "tags": ["taga"],
+        "ignores": ["mx.smartmatrix.common.core.exception", "m.s.i.s.i."],
+        "ding": "",
         "toPersion": ["xx@xx.com"]
     }, {
         "level": "ERROR",

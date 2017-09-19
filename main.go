@@ -5,9 +5,13 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"sort"
 	"time"
 
+	"github.com/labstack/echo"
+	"github.com/labstack/echo/middleware"
 	"github.com/log-dog/logstash-http-push/log"
+	"github.com/tylerb/graceful"
 
 	"github.com/sdvdxl/dinghook"
 
@@ -26,12 +30,17 @@ import (
 	"github.com/log-dog/logstash-http-push/mail"
 )
 
+const (
+	LOG_PREFIX     = "/data/logs/"
+	LOG_PREFIX_LEN = len(LOG_PREFIX)
+)
+
 var (
 	tagsMap      map[string]map[string]bool
 	lastDay      = time.Now().Day()
 	alarmInfo    = &AlarmInfo{}
 	messageRegex *regexp.Regexp
-	ding         *dinghook.DingQueue
+	dingMap      map[string](*dinghook.DingQueue)
 )
 
 // AlarmInfo 告警记录
@@ -52,8 +61,8 @@ func (a *AlarmInfo) GetValues() map[string]uint64 {
 	return r
 }
 
-// GetAndAd 获取并且加1
-func (a *AlarmInfo) GetAndAd(key string) uint64 {
+// GetAndAdd 获取并且加1
+func (a *AlarmInfo) GetAndAdd(key string) uint64 {
 	defer a.lock.Unlock()
 	a.lock.Lock()
 	c := a.alarmInfoMap[key]
@@ -71,7 +80,7 @@ func (a *AlarmInfo) Reset() {
 
 func init() {
 	alarmInfo.alarmInfoMap = make(map[string]uint64)
-	ding = &dinghook.DingQueue{Interval: 3, Limit: 1, Title: "【告警】", AccessToken: "91b35169899bc96e9648b2b8f4208ca56b6f84e14b137ba2b178e0cde9453817"}
+	dingMap = make(map[string](*dinghook.DingQueue))
 }
 
 func main() {
@@ -81,7 +90,18 @@ func main() {
 	}
 
 	cfg := config.Get()
-	_ = cfg
+
+	// 配置钉钉
+
+	for _, f := range cfg.Filters {
+		if len(f.Ding) > 0 {
+			ding := &dinghook.DingQueue{Interval: 3, Limit: 1, Title: "【告警】", AccessToken: f.Ding}
+			ding.Init()
+			go ding.Start()
+			sort.Strings(f.Tags)
+			dingMap[strings.Join(f.Tags, "-")] = ding
+		}
+	}
 
 	// 开启配置文件监控
 	configFileWatcher := cfg.WatchConfigFileStatus()
@@ -96,21 +116,26 @@ func main() {
 		}
 	}()
 
+	engine := echo.New()
+	engine.Use(middleware.Recover())
+	// engine.Use(middleware.Logger())
+
+	engine.Server.Addr = cfg.Address
+	server := &graceful.Server{Timeout: time.Second * 10, Server: engine.Server, Logger: graceful.DefaultLogger()}
+
 	go cleanAlarmInfo()
 
-	http.HandleFunc("/push", func(writer http.ResponseWriter, request *http.Request) {
+	engine.POST("/push", func(c echo.Context) error {
 		var buf bytes.Buffer
-		defer request.Body.Close()
-		io.Copy(&buf, request.Body)
+		defer c.Request().Body.Close()
+		io.Copy(&buf, c.Request().Body)
 		// log.Debug(buf.String())
 		matchCount := checkLogMessage(*cfg, buf.String())
-		writer.Write([]byte(fmt.Sprint(matchCount)))
+		return c.JSON(http.StatusOK, fmt.Sprint(matchCount))
 	})
 
-	ding.Init()
-	go ding.Start()
 	log.Info("listening on ", cfg.Address)
-	if err := http.ListenAndServe(cfg.Address, nil); err != nil {
+	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -134,7 +159,9 @@ func checkLogMessage(cfg config.Config, message string) uint64 {
 			if idx > 0 {
 				msg = msg[:idx]
 			}
-			title := logData.Source[strings.Index(logData.Source, "/data/logs")+1 : strings.Index(logData.Source, ".")]
+			title := logData.Source[strings.Index(logData.Source, LOG_PREFIX)+LOG_PREFIX_LEN : strings.Index(logData.Source, ".")]
+			sort.Strings(logData.Tags)
+			ding := dingMap[strings.Join(logData.Tags, "-")]
 			ding.PushMessage(dinghook.SimpleMessage{Title: title, Content: title + " \n\n " + msg})
 		}
 	}()
@@ -157,15 +184,21 @@ func checkLogMessage(cfg config.Config, message string) uint64 {
 						now := time.Now()
 						key := base64.RawStdEncoding.EncodeToString([]byte(fmt.Sprint(now.Day()) + logData.Host + "\n" + logData.Source + "\n" + getMatchMessage(cfg, logData.Message)))
 
-						count := alarmInfo.GetAndAd(key)
+						count := alarmInfo.GetAndAdd(key)
 						if count >= cfg.MaxPerDay {
-							return count + 1
+							return count
+						}
+
+						for _, ig := range v.Ignores {
+							if strings.Contains(message, ig) {
+								return count
+							}
 						}
 
 						if cfg.IsSendEmail {
 							go sendEmail(cfg, v, logData)
 						}
-						return count + 1
+						return count
 					}
 				}
 			}
@@ -195,7 +228,9 @@ func cleanAlarmInfo() {
 }
 
 func sendEmail(cfg config.Config, filter config.Filter, logData logstash.LogData) {
-	subject := fmt.Sprintf("log error! time: %v\t source: %v", logData.Timestamp, logData.Source)
+	title := logData.Source[strings.Index(logData.Source, LOG_PREFIX)+LOG_PREFIX_LEN : strings.Index(logData.Source, ".")]
+
+	subject := fmt.Sprintf("❌ %v\t time: %v", title, logData.Timestamp)
 	email := mail.Email{MailInfo: cfg.Mail, Subject: subject, Data: logData, MailTemplate: "log.html", ToPersion: filter.ToPersion}
 	if err := mail.SendEmail(email); err != nil {
 		log.Error("send email error:", err, "\nto:", filter.ToPersion)
