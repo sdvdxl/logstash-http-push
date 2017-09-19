@@ -29,3 +29,4 @@ _testmain.go
 .vscode
 cfg.json
 logstash-http-push
+falcon-logstash-http-push
