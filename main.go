@@ -243,7 +243,7 @@ func sendEmail(cfg config.Config, filter config.Filter, logData logstash.LogData
 			log.Error(errMsg)
 			// 发送钉钉，
 			if ding != nil {
-				sendDing(filter, logData)
+				go sendDing(filter, logData)
 				ding.Push(errMsg + "\n 切换下一个email尝试发送")
 			}
 			mailInfo = mail.GetNextMail(cfg)
