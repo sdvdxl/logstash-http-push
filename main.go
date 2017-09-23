@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/log-dog/logstash-http-push/log"
+	"github.com/sdvdxl/logstash-http-push/log"
 
 	"strings"
 
@@ -19,9 +19,9 @@ import (
 
 	"regexp"
 
-	"github.com/log-dog/logstash-http-push/config"
-	"github.com/log-dog/logstash-http-push/logstash"
-	"github.com/log-dog/logstash-http-push/mail"
+	"github.com/sdvdxl/logstash-http-push/config"
+	"github.com/sdvdxl/logstash-http-push/logstash"
+	"github.com/sdvdxl/logstash-http-push/mail"
 )
 
 var (

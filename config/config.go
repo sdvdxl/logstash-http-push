@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 
-	"github.com/log-dog/logstash-http-push/log"
+	"github.com/sdvdxl/logstash-http-push/log"
 
 	"strings"
 
