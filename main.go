@@ -14,11 +14,11 @@ import (
 
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
-	"github.com/log-dog/logstash-http-push/config"
-	"github.com/log-dog/logstash-http-push/log"
-	"github.com/log-dog/logstash-http-push/logstash"
-	"github.com/log-dog/logstash-http-push/mail"
 	"github.com/sdvdxl/dinghook"
+	"github.com/sdvdxl/logstash-http-push/config"
+	"github.com/sdvdxl/logstash-http-push/log"
+	"github.com/sdvdxl/logstash-http-push/logstash"
+	"github.com/sdvdxl/logstash-http-push/mail"
 	"github.com/tylerb/graceful"
 )
 

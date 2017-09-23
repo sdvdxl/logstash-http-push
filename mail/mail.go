@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"html/template"
 
-	"github.com/log-dog/logstash-http-push/config"
-	"github.com/log-dog/logstash-http-push/log"
+	"github.com/sdvdxl/logstash-http-push/config"
+	"github.com/sdvdxl/logstash-http-push/log"
 	"gopkg.in/gomail.v2"
 )
 
