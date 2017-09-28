@@ -19,9 +19,12 @@ import (
 
 	"regexp"
 
+	"github.com/labstack/echo"
+	"github.com/labstack/echo/middleware"
 	"github.com/sdvdxl/logstash-http-push/config"
 	"github.com/sdvdxl/logstash-http-push/logstash"
 	"github.com/sdvdxl/logstash-http-push/mail"
+	"github.com/tylerb/graceful"
 )
 
 var (
@@ -71,6 +74,9 @@ func init() {
 }
 
 func main() {
+	engine := echo.New()
+	engine.Use(middleware.Logger())
+	engine.Use(middleware.Recover())
 
 	if err := config.Load(); err != nil {
 		panic(err)
@@ -93,20 +99,19 @@ func main() {
 	}()
 
 	go cleanAlarmInfo()
-
-	http.HandleFunc("/push", func(writer http.ResponseWriter, request *http.Request) {
+	engine.POST("/push", func(c echo.Context) error {
 		var buf bytes.Buffer
-		defer request.Body.Close()
-		io.Copy(&buf, request.Body)
-		// log.Debug(buf.String())
+		defer c.Request().Body.Close()
+		io.Copy(&buf, c.Request().Body)
+		log.Debug(buf.String())
+
 		matchCount := checkLogMessage(*cfg, buf.String())
-		writer.Write([]byte(fmt.Sprint(matchCount)))
+		return c.String(http.StatusOK, fmt.Sprint(matchCount))
 	})
 
-	log.Info("listening on ", cfg.Address)
-	if err := http.ListenAndServe(cfg.Address, nil); err != nil {
-		log.Fatal(err)
-	}
+	srv := &graceful.Server{Timeout: time.Second * 10, Server: engine.Server, Logger: graceful.DefaultLogger()}
+	go func() { srv.ListenAndServe() }()
+	<-srv.StopChan()
 }
 
 // 检查log信息是否匹配
