@@ -15,10 +15,10 @@
     "filters": [{
         "level": "ERROR",
         "tags": ["taga"],
-        "toPersion": ["xx@xx.com"]
+        "ToPerson": ["xx@xx.com"]
     }, {
         "level": "ERROR",
         "tags": ["tagb"],
-        "toPersion": ["xx.@xx..com"]
+        "ToPerson": ["xx.@xx..com"]
     }]
 }
