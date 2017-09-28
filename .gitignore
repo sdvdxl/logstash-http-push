@@ -28,3 +28,4 @@ _testmain.go
 .iml
 .vscode
 cfg.json
+logstash-http-push
