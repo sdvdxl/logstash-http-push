@@ -12,7 +12,7 @@ import (
 // Email 邮件信息
 type Email struct {
 	MailInfo     config.MailInfo
-	ToPersion    []string
+	ToPerson    []string
 	Subject      string
 	MailTemplate string
 	Data         interface{}
@@ -24,7 +24,7 @@ func SendEmail(email Email) error {
 	mailInfo := email.MailInfo
 	m := gomail.NewMessage()
 	m.SetHeader("From", mailInfo.Sender)
-	m.SetHeader("To", email.ToPersion...)
+	m.SetHeader("To", email.ToPerson...)
 	m.SetHeader("Subject", email.Subject)
 
 	d := gomail.NewDialer(mailInfo.SMTP, mailInfo.Port, mailInfo.Sender, mailInfo.Password)

@@ -181,9 +181,9 @@ func cleanAlarmInfo() {
 
 func sendEmail(cfg config.Config, filter config.Filter, logData logstash.LogData) {
 	subject := fmt.Sprintf("log error! time: %v\t source: %v", logData.Timestamp, logData.Source)
-	email := mail.Email{MailInfo: cfg.Mail, Subject: subject, Data: logData, MailTemplate: "log.html", ToPersion: filter.ToPersion}
+	email := mail.Email{MailInfo: cfg.Mail, Subject: subject, Data: logData, MailTemplate: "log.html", ToPerson: filter.ToPerson}
 	if err := mail.SendEmail(email); err != nil {
-		log.Error("send email error:", err, "\nto:", filter.ToPersion)
+		log.Error("send email error:", err, "\nto:", filter.ToPerson)
 	} else {
 		log.Info("send email success")
 	}

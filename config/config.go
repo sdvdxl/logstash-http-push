@@ -48,9 +48,9 @@ type MailInfo struct {
 
 // Filter log 过滤
 type Filter struct {
-	Level     string   `json:"level"`
-	Tags      []string `json:"tags"`
-	ToPersion []string `json:"toPersion"` // 邮件要发送的人
+	Level    string   `json:"level"`
+	Tags     []string `json:"tags"`
+	ToPerson []string `json:"toPerson"` // 邮件要发送的人
 }
 
 // Load 读取配置文件
