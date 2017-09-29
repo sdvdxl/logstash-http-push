@@ -6,12 +6,12 @@
     "negate": true,
     "sendEmail": false,
     "timeZone": 8,
-    "mail": {
+    "mail": [{
         "smtp": "smtp.xxx.com",
         "port": 25,
         "sender": "monitor@xxx.com",
         "password": ""
-    },
+    }],
     "filters": [{
         "level": "ERROR",
         "tags": ["taga"],
