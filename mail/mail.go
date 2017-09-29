@@ -18,6 +18,21 @@ type Email struct {
 	Data         interface{}
 }
 
+var lastMailIndex = 0
+
+func GetMail(cfg config.Config) config.MailInfo {
+	return cfg.Mails[lastMailIndex]
+}
+
+func GetNextMail(cfg config.Config) config.MailInfo {
+	lastMailIndex++
+	if lastMailIndex >= len(cfg.Mails) {
+		lastMailIndex = 0
+	}
+
+	return cfg.Mails[lastMailIndex]
+}
+
 // SendEmail 发送邮件
 func SendEmail(email Email) error {
 	log.Info("sendding mail...")
