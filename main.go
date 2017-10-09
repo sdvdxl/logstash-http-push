@@ -250,8 +250,7 @@ func sendEmail(cfg config.Config, filter config.Filter, logData logstash.LogData
 
 	if !sendSuccess && ding != nil {
 		ding := getDing(filter)
-		ding.Push("所有 mail 都发送失败，请检查发送频率或者邮件信息，下面是发送失败的错误：")
-		sendDing(filter, logData)
+		ding.Push("所有 mail 都发送失败，请检查发送频率或者邮件信息，下面是发送失败的错误：\n" + logData.Message)
 	}
 
 }
