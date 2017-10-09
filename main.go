@@ -123,7 +123,7 @@ func main() {
 		matchCount := checkLogMessage(*cfg, buf.String())
 		return c.String(http.StatusOK, fmt.Sprint(matchCount))
 	})
-
+	engine.Server.Addr = cfg.Address
 	srv := &graceful.Server{Timeout: time.Second * 10, Server: engine.Server, Logger: graceful.DefaultLogger()}
 	go func() { srv.ListenAndServe() }()
 	<-srv.StopChan()
