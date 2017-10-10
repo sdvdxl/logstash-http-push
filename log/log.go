@@ -10,9 +10,9 @@ var (
 	flag     = l.Lshortfile | l.Ldate | l.Ltime
 	fatalLog = l.New(os.Stderr, "FATAL\t", flag)
 	errLog   = l.New(os.Stderr, "ERROR\t", flag)
-	warnLog  = l.New(os.Stderr, "WARN \t", flag)
-	infoLog  = l.New(os.Stderr, "INFO \t", flag)
-	debugLog = l.New(os.Stderr, "DEBUG\t", flag)
+	warnLog  = l.New(os.Stdout, "WARN \t", flag)
+	infoLog  = l.New(os.Stdout, "INFO \t", flag)
+	debugLog = l.New(os.Stdout, "DEBUG\t", flag)
 )
 
 // Fatal Fatal

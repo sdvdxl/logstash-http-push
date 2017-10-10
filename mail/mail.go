@@ -4,33 +4,25 @@ import (
 	"bytes"
 	"html/template"
 
-	"github.com/sdvdxl/logstash-http-push/config"
 	"github.com/sdvdxl/logstash-http-push/log"
 	"gopkg.in/gomail.v2"
 )
 
 // Email 邮件信息
 type Email struct {
-	MailInfo     config.MailInfo
-	ToPerson    []string
+	MailInfo     MailInfo
+	ToPerson     []string
 	Subject      string
 	MailTemplate string
 	Data         interface{}
 }
 
-var lastMailIndex = 0
-
-func GetMail(cfg config.Config) config.MailInfo {
-	return cfg.Mails[lastMailIndex]
-}
-
-func GetNextMail(cfg config.Config) config.MailInfo {
-	lastMailIndex++
-	if lastMailIndex >= len(cfg.Mails) {
-		lastMailIndex = 0
-	}
-
-	return cfg.Mails[lastMailIndex]
+// MailInfo 邮件信息
+type MailInfo struct {
+	SMTP     string `json:"smtp"`
+	Port     int    `json:"port"`
+	Sender   string `json:"sender"`
+	Password string `json:"password"`
 }
 
 // SendEmail 发送邮件

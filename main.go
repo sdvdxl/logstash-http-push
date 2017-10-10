@@ -8,11 +8,11 @@ import (
 	"io"
 	"net/http"
 
-	"regexp"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/facebookgo/grace/gracehttp"
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
 	"github.com/sdvdxl/dinghook"
@@ -20,7 +20,6 @@ import (
 	"github.com/sdvdxl/logstash-http-push/log"
 	"github.com/sdvdxl/logstash-http-push/logstash"
 	"github.com/sdvdxl/logstash-http-push/mail"
-	"github.com/tylerb/graceful"
 )
 
 const (
@@ -31,10 +30,9 @@ const (
 )
 
 var (
-	lastDay      = time.Now().Day()
-	alarmInfo    = &AlarmInfo{}
-	messageRegex *regexp.Regexp
-	dingMap      map[string](*dinghook.DingQueue)
+	lastDay   = time.Now().Day()
+	alarmInfo = &AlarmInfo{}
+	dingMap   map[string](*dinghook.DingQueue)
 )
 
 // AlarmInfo 告警记录
@@ -82,10 +80,6 @@ func main() {
 	engine.Use(middleware.Logger())
 	engine.Use(middleware.Recover())
 
-	if err := config.Load(); err != nil {
-		panic(err)
-	}
-
 	cfg := config.Get()
 
 	// 配置钉钉
@@ -99,19 +93,6 @@ func main() {
 		}
 	}
 
-	// 开启配置文件监控
-	configFileWatcher := cfg.WatchConfigFileStatus()
-
-	go func() {
-		for {
-			select {
-			case <-configFileWatcher:
-				messageRegex = regexp.MustCompile(cfg.Match)
-				log.Info("config changed")
-			}
-		}
-	}()
-
 	go cleanAlarmInfo()
 
 	engine.POST("/push", func(c echo.Context) error {
@@ -120,18 +101,15 @@ func main() {
 		io.Copy(&buf, c.Request().Body)
 		log.Debug(buf.String())
 
-		matchCount := checkLogMessage(*cfg, buf.String())
+		matchCount := checkLogMessage(cfg, buf.String())
 		return c.String(http.StatusOK, fmt.Sprint(matchCount))
 	})
 	engine.Server.Addr = cfg.Address
-	srv := &graceful.Server{Timeout: time.Second * 10, Server: engine.Server, Logger: graceful.DefaultLogger()}
-	go func() { srv.ListenAndServe() }()
-	<-srv.StopChan()
-
+	gracehttp.Serve(engine.Server)
 }
 
 // 检查log信息是否匹配
-func checkLogMessage(cfg config.Config, message string) uint64 {
+func checkLogMessage(cfg *config.Config, message string) uint64 {
 	var logData logstash.LogData
 	if err := json.Unmarshal([]byte(message), &logData); err != nil {
 		log.Error(err)
@@ -163,6 +141,7 @@ func checkLogMessage(cfg config.Config, message string) uint64 {
 
 						count := alarmInfo.GetAndAdd(key)
 						if count >= cfg.MaxPerDay {
+							log.Warn("max per day reached，not send email， max count ：", cfg.MaxPerDay, " current count：", count)
 							return count
 						}
 
@@ -176,7 +155,7 @@ func checkLogMessage(cfg config.Config, message string) uint64 {
 						go sendDing(v, logData)
 
 						if cfg.IsSendEmail {
-							go sendEmail(cfg, v, logData)
+							go sendEmail(v, logData)
 						}
 						return count
 					}
@@ -187,11 +166,11 @@ func checkLogMessage(cfg config.Config, message string) uint64 {
 	return 0
 }
 
-func getDing(filter config.Filter) *dinghook.DingQueue {
+func getDing(filter *config.Filter) *dinghook.DingQueue {
 	return dingMap[strings.Join(filter.Tags, splitChar)]
 }
 
-func sendDing(filter config.Filter, logData logstash.LogData) {
+func sendDing(filter *config.Filter, logData logstash.LogData) {
 	msg := logData.Message
 	if strings.Contains(msg, "mongodb") || strings.Contains(msg, "AmqpConnectException") {
 		idx := strings.Index(msg, " at")
@@ -227,20 +206,20 @@ func cleanAlarmInfo() {
 	}
 }
 
-func sendEmail(cfg config.Config, filter config.Filter, logData logstash.LogData) {
+func sendEmail(filter *config.Filter, logData logstash.LogData) {
 
 	title := logData.Source[strings.Index(logData.Source, logPathPrefix)+logPathPrefixLen : strings.Index(logData.Source, ".")]
 
 	subject := fmt.Sprintf("❌ %v\t time: %v", title, logData.Timestamp)
-	mailInfo := mail.GetMail(cfg)
+	mailInfo := filter.GetMail()
 	sendSuccess := false
 	ding := getDing(filter)
-	for range cfg.Mails { // 如果失败，循环发送，直到配置的所有邮箱有成功的，或者全部失败
+	for range filter.Mails { // 如果失败，循环发送，直到配置的所有邮箱有成功的，或者全部失败
 		email := mail.Email{MailInfo: mailInfo, Subject: subject, Data: logData, MailTemplate: "log.html", ToPerson: filter.ToPerson}
 		if err := mail.SendEmail(email); err != nil {
 			errMsg := fmt.Sprint("send email error:", err, "\nto:", filter.ToPerson)
 			log.Error(errMsg)
-			mailInfo = mail.GetNextMail(cfg)
+			mailInfo = filter.GetNextMail()
 		} else {
 			sendSuccess = true
 			log.Info("send email success")
@@ -255,8 +234,8 @@ func sendEmail(cfg config.Config, filter config.Filter, logData logstash.LogData
 
 }
 
-func getMatchMessage(cfg config.Config, message string) string {
-	str := messageRegex.FindString(message)
+func getMatchMessage(cfg *config.Config, message string) string {
+	str := cfg.MatchRegex.FindString(message)
 	if cfg.Negate {
 		return strings.Replace(message, str, "", 1)
 	}

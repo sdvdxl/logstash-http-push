@@ -6,20 +6,19 @@
     "negate": true,
     "sendEmail": false,
     "timeZone": 8,
-
-    "mails": [{
-        "smtp": "smtp.xxx.com",
-        "port": 25,
-        "sender": "monitor@xxx.com",
-        "password": ""
-    }],
     "filters": [{
         "name": "unique1",
         "level": "ERROR",
         "tags": ["taga"],
         "ignores": ["mx.smartmatrix.common.core.exception", "m.s.i.s.i."],
         "ding": "",
-        "toPerson": ["xx@xx.com"]
+        "toPerson": ["xx@xx.com"],
+        "mails": [{
+            "smtp": "smtp.xxx.com",
+            "port": 25,
+            "sender": "monitor@xxx.com",
+            "password": ""
+        }]
     }, {
         "name": "unique2",
         "level": "ERROR",
