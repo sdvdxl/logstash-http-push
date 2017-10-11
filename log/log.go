@@ -15,29 +15,29 @@ var (
 	warnLog  = l.New(os.Stdout, "WARN \t", flag)
 	infoLog  = l.New(os.Stdout, "INFO \t", flag)
 	debugLog = l.New(os.Stdout, "DEBUG\t", flag)
-	logLevel = info
+	logLevel = inf
 )
 
 type level int
 
 const (
-	debug level = iota
-	info
+	deb level = iota
+	inf
 	warn
-	error
+	err
 	fatal
 )
 
 func Init(cfg *config.Config) {
 	switch strings.ToUpper(cfg.LogLevel) {
 	case "DEBUG":
-		logLevel = debug
+		logLevel = deb
 	case "INFO":
-		logLevel = info
+		logLevel = inf
 	case "WARN":
 		logLevel = warn
 	case "ERROR":
-		logLevel = error
+		logLevel = err
 	case "FATAL":
 		logLevel = fatal
 	}
@@ -51,7 +51,7 @@ func Fatal(msg ...interface{}) {
 
 // Error Error
 func Error(msg ...interface{}) {
-	if logLevel > error {
+	if logLevel > err {
 		return
 	}
 	errLog.Output(2, fmt.Sprint(msg))
@@ -67,7 +67,7 @@ func Warn(msg ...interface{}) {
 
 // Info  Info
 func Info(msg ...interface{}) {
-	if logLevel > info {
+	if logLevel > inf {
 		return
 	}
 	infoLog.Output(2, fmt.Sprint(msg))
@@ -75,7 +75,7 @@ func Info(msg ...interface{}) {
 
 // Debug Debug
 func Debug(msg ...interface{}) {
-	if logLevel > debug {
+	if logLevel > deb {
 		return
 	}
 

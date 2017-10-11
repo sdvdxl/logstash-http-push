@@ -70,9 +70,9 @@ func (cfg *Config) GetFilter(tags []string, level string) []*Filter {
 
 func filterWithLevel(filters []*Filter, level string) []*Filter {
 	result := make([]*Filter, 0, len(filters))
-	for i := range cfg.Filters {
-		filter := cfg.Filters[i]
-		// 寻找匹配的 Tags
+	for i := range filters {
+		filter := filters[i]
+		// 寻找匹配的 level
 		for _, l := range filter.Levels {
 			if strings.ToUpper(l) == strings.ToUpper(level) {
 				result = append(result, filter)
@@ -89,9 +89,9 @@ func filterWithTags(filters []*Filter, tags []string) []*Filter {
 	sort.Strings(tags)
 	// 检查每个filter
 
-	tagMatchCount := 0
-	for i := range cfg.Filters {
-		filter := cfg.Filters[i]
+	for i := range filters {
+		tagMatchCount := 0
+		filter := filters[i]
 		// 寻找匹配的 Tags
 		for _, filterTag := range filter.Tags {
 			for _, logTag := range tags {
@@ -152,8 +152,8 @@ func check() {
 			if filter.Tags == nil {
 				filters[i].Tags = make([]string, 0)
 			} else {
-				for j := range filters[i].Levels {
-					filters[i].Levels[j] = strings.ToUpper(strings.TrimSpace(filters[i].Levels[j]))
+				for j := range filters[i].Tags {
+					filters[i].Tags[j] = strings.ToUpper(strings.TrimSpace(filters[i].Tags[j]))
 				}
 			}
 			sort.Strings(filter.Tags)
@@ -237,8 +237,11 @@ func check() {
 
 			filter.Mail.Ticker = time.NewTicker(time.Second * time.Duration(filter.Mail.Duration))
 		}
+		log.Println("filter", filter.Name, "inited")
 		cfg.filterMap[filter.Name] = filter
+
 	}
 
 	inited = true
+	log.Println("config inited")
 }

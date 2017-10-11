@@ -27,13 +27,10 @@ const (
 	// logPathPrefix 日志路径前缀
 	logPathPrefix    = "/data/logs/"
 	logPathPrefixLen = len(logPathPrefix)
-	splitChar        = "@"
 )
 
 var (
-	lastDay   = time.Now().Day()
-	alarmInfo = &AlarmInfo{}
-	dingMap   map[string](*dinghook.DingQueue)
+	dingMap map[string](*dinghook.DingQueue)
 )
 
 // AlarmInfo 告警记录
@@ -72,10 +69,10 @@ func (a *AlarmInfo) Reset() {
 }
 
 func init() {
-	alarmInfo.alarmInfoMap = make(map[string]uint64)
 	dingMap = make(map[string](*dinghook.DingQueue))
 }
 
+// TODO graceful shutdown ，send rest mails
 func main() {
 	engine := echo.New()
 	engine.Use(middleware.Logger())
@@ -84,6 +81,7 @@ func main() {
 	log.Init(cfg)
 
 	for _, filter := range cfg.Filters {
+		log.Debug("config filter", filter.Name, "email and ding")
 		// 配置钉钉
 		if filter.Ding.Enable {
 			for _, d := range filter.Ding.Senders {
@@ -95,57 +93,54 @@ func main() {
 		}
 
 		// 配置 ticker
-		if filter.Mail.Ticker != nil {
-			go func() {
-				log.Info("init filter ", filter.Name, "ticker , duration", filter.Mail.Duration)
+		log.Info("init filter ", filter.Name, "ticker , duration", filter.Mail.Duration)
+		go func(filter *config.Filter) {
+			for {
+				select {
+				case <-filter.Mail.Ticker.C:
+					func() {
+						defer filter.Mail.Lock.Unlock()
+						log.Debug("ticker report")
+						filter.Mail.Lock.Lock()
+						if len(filter.Mail.MailMessages) == 0 {
+							return
+						}
 
-				for {
-					select {
-					case <-filter.Mail.Ticker.C:
-						func() {
-							defer filter.Mail.Lock.Unlock()
-							log.Debug("ticker report")
-							filter.Mail.Lock.Lock()
-							if len(filter.Mail.MailMessages) == 0 {
-								return
+						sendSuccess := false
+						ding := getDing(filter)
+						var message, errMsgs string
+						for range filter.Mail.Senders { // 如果失败，循环发送，直到配置的所有邮箱有成功的，或者全部失败
+							title := fmt.Sprint(filter.Tags, filter.Mail.Duration, "秒内邮件聚合【", len(filter.Mail.MailMessages), "】Exceptions")
+
+							mailSender := filter.GetMail()
+							message = strings.Join(filter.Mail.MailMessages, "<br><br><hr>")
+							filter.Mail.MailMessages = make([]string, 0, 10)
+
+							email := mail.Email{MailSender: mailSender, Subject: title, Message: message, ToPerson: filter.Mail.ToPersons}
+							if err := mail.SendEmail(email); err != nil {
+								errMsg := fmt.Sprint("send email error:", err, "\nsender:", filter.GetMail().Sender, "\nto:", filter.Mail.ToPersons)
+								errMsgs += errMsg + "\n"
+								log.Error(errMsg)
+								mailSender = filter.GetNextMail()
+							} else {
+								sendSuccess = true
+								log.Info("send email success")
+								break
 							}
+						}
 
-							sendSuccess := false
+						if !sendSuccess && ding != nil {
 							ding := getDing(filter)
-							var message, errMsgs string
-							for range filter.Mail.Senders { // 如果失败，循环发送，直到配置的所有邮箱有成功的，或者全部失败
-								title := fmt.Sprint(filter.Tags, filter.Mail.Duration, "秒内邮件聚合")
-
-								mailSender := filter.GetMail()
-								message = strings.Join(filter.Mail.MailMessages, "<br><br><hr>")
-								filter.Mail.MailMessages = make([]string, 0, 10)
-
-								email := mail.Email{MailSender: mailSender, Subject: title, Message: message, ToPerson: filter.Mail.ToPersons}
-								if err := mail.SendEmail(email); err != nil {
-									errMsg := fmt.Sprint("send email error:", err, "\nsender:", filter.GetMail().Sender, "\nto:", filter.Mail.ToPersons)
-									errMsgs += errMsg + "\n"
-									log.Error(errMsg)
-									mailSender = filter.GetNextMail()
-								} else {
-									sendSuccess = true
-									log.Info("send email success")
-									break
-								}
+							senders := ""
+							for _, m := range filter.Mail.Senders {
+								senders += m.Sender + " "
 							}
-
-							if !sendSuccess && ding != nil {
-								ding := getDing(filter)
-								senders := ""
-								for _, m := range filter.Mail.Senders {
-									senders += m.Sender + " "
-								}
-								ding.Push(fmt.Sprintf("所有 mail 都发送失败，，失败信息: \n\n%v,请检查发送频率或者邮件信息，下面是发送失败的错误：\n\n %v", errMsgs, message))
-							}
-						}()
-					}
+							ding.Push(fmt.Sprintf("所有 mail 都发送失败，，失败信息: \n\n%v,请检查发送频率或者邮件信息，下面是发送失败的错误：\n\n %v", errMsgs, message))
+						}
+					}()
 				}
-			}()
-		}
+			}
+		}(filter)
 
 	}
 
@@ -180,6 +175,11 @@ func convertMessageToData(cfg *config.Config, message string) (*logstash.LogData
 func send(cfg *config.Config, logData *logstash.LogData) {
 
 	matchFilter := cfg.GetFilter(logData.Tags, logData.Level)
+	if len(matchFilter) == 0 {
+		log.Warn("no filter matched")
+		return
+	}
+
 	go sendDing(matchFilter, *logData)
 	go sendEmail(matchFilter, *logData)
 }
