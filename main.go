@@ -20,6 +20,7 @@ import (
 	"github.com/sdvdxl/logstash-http-push/log"
 	"github.com/sdvdxl/logstash-http-push/logstash"
 	"github.com/sdvdxl/logstash-http-push/mail"
+	"html/template"
 )
 
 const (
@@ -80,15 +81,71 @@ func main() {
 	engine.Use(middleware.Logger())
 	engine.Use(middleware.Recover())
 	cfg := config.Get()
+	log.Init(cfg)
 
 	for _, filter := range cfg.Filters {
+
+		// 配置 ticker
+		if filter.Mail.Ticker != nil {
+			go func() {
+				log.Info("init filter ", filter.Name, "ticker , duration", filter.Mail.Duration)
+
+				for {
+					select {
+					case <-filter.Mail.Ticker.C:
+						func() {
+							defer filter.Mail.Lock.Unlock()
+							log.Debug("ticker report")
+							filter.Mail.Lock.Lock()
+							if len(filter.Mail.MailMessages) == 0 {
+								return
+							}
+
+							sendSuccess := false
+							ding := getDing(filter)
+							var message, errMsgs string
+							for range filter.Mail.Senders { // 如果失败，循环发送，直到配置的所有邮箱有成功的，或者全部失败
+								title := fmt.Sprint(filter.Tags, filter.Mail.Duration, "秒内邮件聚合")
+
+								mailSender := filter.GetMail()
+								message = strings.Join(filter.Mail.MailMessages, "<br><br><hr>")
+								filter.Mail.MailMessages = make([]string, 0, 10)
+
+								email := mail.Email{MailSender: mailSender, Subject: title, Message: message, ToPerson: filter.Mail.ToPersons}
+								if err := mail.SendEmail(email); err != nil {
+									errMsg := fmt.Sprint("send email error:", err, "\nsender:", filter.GetMail().Sender, "\nto:", filter.Mail.ToPersons)
+									errMsgs += errMsg + "\n"
+									log.Error(errMsg)
+									mailSender = filter.GetNextMail()
+								} else {
+									sendSuccess = true
+									log.Info("send email success")
+									break
+								}
+							}
+
+							if !sendSuccess && ding != nil {
+								ding := getDing(filter)
+								senders := ""
+								for _, m := range filter.Mail.Senders {
+									senders += m.Sender + " "
+								}
+								ding.Push(fmt.Sprintf("所有 mail 都发送失败，，失败信息: \n\n%v,请检查发送频率或者邮件信息，下面是发送失败的错误：\n\n %v", errMsgs, message))
+							}
+						}()
+					}
+				}
+			}()
+		}
+
 		// 配置钉钉
-		for _, d := range filter.Dings {
-			if d.Enable {
+		if filter.Ding.Enable {
+
+			for _, d := range filter.Ding.Senders {
 				ding := &dinghook.DingQueue{Interval: 3, Limit: 1, Title: "【告警】", AccessToken: d.Token}
 				ding.Init()
 				go ding.Start()
-				dingMap[d.Name] = ding
+				dingMap[d.Token] = ding
 			}
 		}
 
@@ -135,28 +192,28 @@ func getDing(filter *config.Filter) *dinghook.DingQueue {
 
 func sendDing(filters []*config.Filter, logData logstash.LogData) {
 	for _, filter := range filters {
-		for _, d := range filter.Dings {
-			if !d.Enable {
-				log.Debug("ding ", d.Name, " is disabled")
-				continue
-			}
+		if !filter.Ding.Enable {
+			log.Debug("ding ", filter.Ding.Name, " is disabled")
+			continue
+		}
+		msg := logData.Message
+		for r := range filter.Ding.MatchRegex {
+			if filter.Ding.MatchRegex[r].MatchString(msg) {
+				idx := strings.Index(msg, " at")
 
-			msg := logData.Message
-			for _, r := range d.MatchRegex {
-				if r.MatchString(msg) {
-					idx := strings.Index(msg, " at")
+				if idx > 0 {
+					msg = msg[:idx]
+				}
+				title := logData.Source[strings.Index(logData.Source, logPathPrefix)+logPathPrefixLen : strings.Index(logData.Source, ".")]
 
-					if idx > 0 {
-						msg = msg[:idx]
-					}
-					title := logData.Source[strings.Index(logData.Source, logPathPrefix)+logPathPrefixLen : strings.Index(logData.Source, ".")]
-					ding := getDing(filter)
+				for _, d := range filter.Ding.Senders {
+					ding := dingMap[d.Token]
 					if ding != nil {
 						ding.PushMessage(dinghook.SimpleMessage{Title: title, Content: title + " \n\n " + msg})
 					}
 				}
-			}
 
+			}
 		}
 	}
 
@@ -165,39 +222,26 @@ func sendDing(filters []*config.Filter, logData logstash.LogData) {
 func sendEmail(filters []*config.Filter, logData logstash.LogData) {
 	for _, filter := range filters {
 
-		title := logData.Source[strings.Index(logData.Source, logPathPrefix)+logPathPrefixLen : strings.Index(logData.Source, ".")]
-
-		subject := fmt.Sprintf("❌ %v\t time: %v", title, logData.Timestamp)
-		mailInfo := filter.GetMail()
-		sendSuccess := false
-		ding := getDing(filter)
-		var errMsgs string
-		for _, fm := range filter.Mails { // 如果失败，循环发送，直到配置的所有邮箱有成功的，或者全部失败
-			if !fm.Enable {
-				continue
-			}
-
-			email := mail.Email{MailInfo: mailInfo, Subject: subject, Data: logData, MailTemplate: "log.html", ToPerson: fm.ToPersons}
-			if err := mail.SendEmail(email); err != nil {
-				errMsg := fmt.Sprint("send email error:", err, "\nsender:", filter.GetMail().Sender, "\nto:", fm.ToPersons)
-				errMsgs += errMsg + "\n"
-				log.Error(errMsg)
-				mailInfo = filter.GetNextMail()
-			} else {
-				sendSuccess = true
-				log.Info("send email success")
-				break
-			}
+		if !filter.Mail.Enable {
+			continue
 		}
 
-		if !sendSuccess && ding != nil {
-			ding := getDing(filter)
-			senders := ""
-			for _, m := range filter.Mails {
-				senders += m.Sender + " "
-			}
-			ding.Push(fmt.Sprintf("所有 mail 都发送失败，，失败信息: \n%v,请检查发送频率或者邮件信息，下面是发送失败的错误：\n %v", errMsgs, logData.Message))
-		}
+		// 如果 ticker 不是 nil，则定时发送
+		message := getMessage(logData)
+		func() {
+			defer filter.Mail.Lock.Unlock()
+			filter.Mail.Lock.Lock()
+			filter.Mail.MailMessages = append(filter.Mail.MailMessages, message)
+		}()
 
 	}
+}
+
+func getMessage(logdata logstash.LogData) string {
+	tmpl, err := template.ParseFiles("templates/log.html")
+	errors.Panic(err)
+
+	var contents bytes.Buffer
+	errors.Panic(tmpl.Execute(&contents, logdata))
+	return contents.String()
 }

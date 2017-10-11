@@ -1,9 +1,6 @@
 package mail
 
 import (
-	"bytes"
-	"html/template"
-
 	"github.com/sdvdxl/logstash-http-push/config"
 	"github.com/sdvdxl/logstash-http-push/log"
 	"gopkg.in/gomail.v2"
@@ -11,34 +8,25 @@ import (
 
 // Email 邮件信息
 type Email struct {
-	MailInfo     config.MailInfo
-	ToPerson     []string
-	Subject      string
-	MailTemplate string
-	Data         interface{}
+	MailSender config.MailSender
+	ToPerson   []string
+	Subject    string
+	Message    string
+	Data       interface{}
 }
 
 // SendEmail 发送邮件
 func SendEmail(email Email) error {
 	log.Info("sending mail to:", email.ToPerson)
-	mailInfo := email.MailInfo
+	mailInfo := email.MailSender
 	m := gomail.NewMessage()
 	m.SetHeader("From", mailInfo.Sender)
 	m.SetHeader("To", email.ToPerson...)
 	m.SetHeader("Subject", email.Subject)
 
 	d := gomail.NewDialer(mailInfo.SMTP, mailInfo.Port, mailInfo.Sender, mailInfo.Password)
-	tmpl, err := template.ParseFiles("templates/" + email.MailTemplate)
-	if err != nil {
-		return err
-	}
 
-	var contents bytes.Buffer
-	if err = tmpl.Execute(&contents, email.Data); err != nil {
-		return err
-	}
-
-	m.SetBody("text/html", contents.String())
+	m.SetBody("text/html", email.Message)
 
 	return d.DialAndSend(m)
 }

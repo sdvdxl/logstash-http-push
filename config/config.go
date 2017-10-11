@@ -5,7 +5,7 @@ import (
 
 	"github.com/sdvdxl/go-tools/errors"
 
-	"github.com/sdvdxl/logstash-http-push/log"
+	"log"
 
 	"fmt"
 	"github.com/fsnotify/fsnotify"
@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 )
 
 const (
@@ -117,9 +118,9 @@ func load() {
 	viperReader := viper.New()
 	viperReader.SetConfigFile(configFile)
 	viperReader.OnConfigChange(func(event fsnotify.Event) {
-		log.Debug("file changed", event)
+		log.Println("file changed", event)
 		if event.Op != fsnotify.Chmod {
-			log.Info("config file changed, reloading...")
+			log.Println("config file changed, reloading...")
 			readConfig(viperReader)
 		}
 	})
@@ -128,7 +129,7 @@ func load() {
 }
 
 func readConfig(viperReader *viper.Viper) {
-	log.Info("read config...")
+	log.Println("read config...")
 	inited = false
 	errors.Panic(viperReader.ReadInConfig())
 	errors.Panic(viperReader.Unmarshal(&cfg))
@@ -136,7 +137,7 @@ func readConfig(viperReader *viper.Viper) {
 }
 
 func check() {
-	log.Info("check config...")
+	log.Println("check config...")
 	// 检查配置项目
 	nameMap := make(map[string]bool)
 	cfg.filterMap = make(map[string]*Filter)
@@ -160,7 +161,7 @@ func check() {
 		{
 			if filter.Levels == nil {
 				filter.Levels = make([]string, 0)
-				log.Info("filter ", filter.Name, " level not set, all levels will pass")
+				log.Println("filter ", filter.Name, " level not set, all levels will pass")
 			} else {
 				for j := range filter.Levels {
 					filter.Levels[j] = strings.ToUpper(strings.TrimSpace(filters[i].Levels[j]))
@@ -181,20 +182,18 @@ func check() {
 
 		// 钉钉
 		{
-			for j := range filter.Dings {
-				d := filter.Dings[j]
-				d.Name = fmt.Sprint(filter.Name, j)
-				if d.Token == "" {
-					log.Warn("filter ", filter.Name, "ding pos:", j, " token is empty, disabled")
-					d.Enable = false
-				}
+			// 				d.Name = fmt.Sprint(filter.Name, j)
 
-				for r := range d.MatchRegexText {
-					if d.MatchRegexText[r] == "" {
-						log.Warn("filter ", filter.Name, "ding pos:", j, " matchRegex is empty, will use .*")
-						d.MatchRegexText[r] = ".*"
-						d.MatchRegex[r] = regexp.MustCompile(d.MatchRegexText[r])
-					}
+			for r := range filter.Ding.MatchRegexText {
+				if filter.Ding.MatchRegexText[r] != "" {
+					filter.Ding.MatchRegex[r] = regexp.MustCompile(filter.Ding.MatchRegexText[r])
+				}
+			}
+
+			for j := range filter.Ding.Senders {
+				d := filter.Ding.Senders[j]
+				if d.Token == "" {
+					panic(fmt.Sprint("filter ", filter.Name, "ding pos:", j, " token is empty, disabled"))
 				}
 
 			}
@@ -202,29 +201,36 @@ func check() {
 
 		// mail
 		{
-			for j := range filter.Mails {
-				m := filter.Mails[j]
-				m.Name = fmt.Sprint(filter.Name, j)
+			if len(filter.Mail.ToPersons) == 0 {
+				panic(fmt.Sprint("filter ", filter.Name, "email toPersons is empty, disabled"))
+			}
+
+			for j := range filter.Mail.Senders {
+				m := filter.Mail.Senders[j]
+
 				if m.Sender == "" {
-					log.Warn("filter ", filter.Name, "email pos", j, " sender is empty, disabled")
-					m.Enable = false
+					panic(fmt.Sprint("filter ", filter.Name, "email pos", j, " sender is empty"))
+
 				}
 
 				if m.Password == "" {
-					log.Warn("filter ", filter.Name, "email pos", j, " password is empty, disabled")
-					m.Enable = false
+					panic(fmt.Sprint("filter ", filter.Name, "email pos", j, " password is empty, disabled"))
 				}
 
 				if m.SMTP == "" {
-					log.Warn("filter ", filter.Name, "email pos", j, " SMTP is empty, disabled")
-					m.Enable = false
+					panic(fmt.Sprint("filter ", filter.Name, "email pos", j, " SMTP is empty, disabled"))
 				}
 
-				if len(m.ToPersons) == 0 {
-					log.Warn("filter ", filter.Name, "email pos", j, " toPersons is empty, disabled")
-					m.Enable = false
-				}
 			}
+
+			if filter.Mail.Duration == 0 {
+				log.Println("mail send duration default set to: 60s")
+				filter.Mail.Duration = 60
+			} else if filter.Mail.Duration < 5 {
+				panic("duration is too small, must gte 5")
+			}
+
+			filter.Mail.Ticker = time.NewTicker(time.Second * time.Duration(filter.Mail.Duration))
 		}
 		cfg.filterMap[filter.Name] = filter
 	}
