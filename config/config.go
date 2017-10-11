@@ -9,6 +9,7 @@ import (
 
 	"fmt"
 	"github.com/fsnotify/fsnotify"
+	"github.com/sdvdxl/go-tools/encrypt"
 	"github.com/spf13/viper"
 	"regexp"
 	"sort"
@@ -22,7 +23,7 @@ const (
 
 // Cfg 配置文件
 var (
-	cfg    *Config
+	cfg    Config
 	once   sync.Once
 	inited = false
 )
@@ -33,7 +34,7 @@ func Get() *Config {
 		once.Do(load)
 	}
 
-	return cfg
+	return &cfg
 }
 
 // Config 配置文件
@@ -117,6 +118,7 @@ func (cfg Config) IsInited() bool {
 func load() {
 	viperReader := viper.New()
 	viperReader.SetConfigFile(configFile)
+	viperReader.SetConfigType("json")
 	viperReader.OnConfigChange(func(event fsnotify.Event) {
 		log.Println("file changed", event)
 		if event.Op != fsnotify.Chmod {
@@ -182,12 +184,15 @@ func check() {
 
 		// 钉钉
 		{
-			// 				d.Name = fmt.Sprint(filter.Name, j)
 
-			for r := range filter.Ding.MatchRegexText {
-				if filter.Ding.MatchRegexText[r] != "" {
-					filter.Ding.MatchRegex[r] = regexp.MustCompile(filter.Ding.MatchRegexText[r])
-				}
+			var tokens string
+			for _, t := range filter.Ding.Senders {
+				tokens += t.Token
+			}
+			filter.Ding.Name = fmt.Sprint(filter.Name, "-", encrypt.MD5([]byte(tokens)))
+
+			if filter.Ding.MatchRegexText != "" {
+				filter.Ding.MatchRegex = regexp.MustCompile(filter.Ding.MatchRegexText)
 			}
 
 			for j := range filter.Ding.Senders {

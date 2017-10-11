@@ -84,6 +84,15 @@ func main() {
 	log.Init(cfg)
 
 	for _, filter := range cfg.Filters {
+		// 配置钉钉
+		if filter.Ding.Enable {
+			for _, d := range filter.Ding.Senders {
+				ding := &dinghook.DingQueue{Interval: 3, Limit: 1, Title: "【告警】", AccessToken: d.Token}
+				ding.Init()
+				go ding.Start()
+				dingMap[d.Token] = ding
+			}
+		}
 
 		// 配置 ticker
 		if filter.Mail.Ticker != nil {
@@ -138,17 +147,6 @@ func main() {
 			}()
 		}
 
-		// 配置钉钉
-		if filter.Ding.Enable {
-
-			for _, d := range filter.Ding.Senders {
-				ding := &dinghook.DingQueue{Interval: 3, Limit: 1, Title: "【告警】", AccessToken: d.Token}
-				ding.Init()
-				go ding.Start()
-				dingMap[d.Token] = ding
-			}
-		}
-
 	}
 
 	engine.POST("/push", func(c echo.Context) error {
@@ -187,7 +185,7 @@ func send(cfg *config.Config, logData *logstash.LogData) {
 }
 
 func getDing(filter *config.Filter) *dinghook.DingQueue {
-	return dingMap[strings.Join(filter.Tags, splitChar)]
+	return dingMap[filter.Ding.Name]
 }
 
 func sendDing(filters []*config.Filter, logData logstash.LogData) {
@@ -197,23 +195,23 @@ func sendDing(filters []*config.Filter, logData logstash.LogData) {
 			continue
 		}
 		msg := logData.Message
-		for r := range filter.Ding.MatchRegex {
-			if filter.Ding.MatchRegex[r].MatchString(msg) {
-				idx := strings.Index(msg, " at")
+		if filter.Ding.MatchRegex.MatchString(msg) {
+			idx := strings.Index(msg, " at")
 
-				if idx > 0 {
-					msg = msg[:idx]
-				}
-				title := logData.Source[strings.Index(logData.Source, logPathPrefix)+logPathPrefixLen : strings.Index(logData.Source, ".")]
-
-				for _, d := range filter.Ding.Senders {
-					ding := dingMap[d.Token]
-					if ding != nil {
-						ding.PushMessage(dinghook.SimpleMessage{Title: title, Content: title + " \n\n " + msg})
-					}
-				}
-
+			if idx > 0 {
+				msg = msg[:idx]
 			}
+			title := logData.Source[strings.Index(logData.Source, logPathPrefix)+logPathPrefixLen : strings.Index(logData.Source, ".")]
+
+			for _, d := range filter.Ding.Senders {
+				ding := dingMap[d.Token]
+				if ding != nil {
+
+					ding.PushMessage(dinghook.SimpleMessage{Title: title, Content: getMessage(logData)})
+
+				}
+			}
+
 		}
 	}
 

@@ -3,13 +3,13 @@ package config
 import "regexp"
 
 type DingInfo struct {
-	Name           string           `json:"-"`
-	Enable         bool             `json:"enable"`
-	MatchRegexText []string         `json:"matchRegex"`
-	MatchRegex     []*regexp.Regexp `json:"-"`
-	Senders        []DingSender     `json:"-"`
+	Name           string         `json:"-" mapstructure:"-"`
+	Enable         bool           `json:"enable" mapstructure:"enable"`
+	MatchRegexText string         `json:"matchRegex" mapstructure:"matchRegex"`
+	MatchRegex     *regexp.Regexp `json:"-" mapstructure:"-"`
+	Senders        []DingSender   `json:"-" mapstructure:"senders"`
 }
 
 type DingSender struct {
-	Token string `json:"token"`
+	Token string `json:"token" mapstructure:"token"`
 }
