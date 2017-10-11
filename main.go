@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,6 +15,7 @@ import (
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
 	"github.com/sdvdxl/dinghook"
+	"github.com/sdvdxl/go-tools/errors"
 	"github.com/sdvdxl/logstash-http-push/config"
 	"github.com/sdvdxl/logstash-http-push/log"
 	"github.com/sdvdxl/logstash-http-push/logstash"
@@ -79,168 +79,125 @@ func main() {
 	engine := echo.New()
 	engine.Use(middleware.Logger())
 	engine.Use(middleware.Recover())
-
 	cfg := config.Get()
 
-	// 配置钉钉
-
-	for _, f := range cfg.Filters {
-		if len(f.Ding) > 0 {
-			ding := &dinghook.DingQueue{Interval: 3, Limit: 1, Title: "【告警】", AccessToken: f.Ding}
-			ding.Init()
-			go ding.Start()
-			dingMap[strings.Join(f.Tags, splitChar)] = ding
+	for _, filter := range cfg.Filters {
+		// 配置钉钉
+		for _, d := range filter.Dings {
+			if d.Enable {
+				ding := &dinghook.DingQueue{Interval: 3, Limit: 1, Title: "【告警】", AccessToken: d.Token}
+				ding.Init()
+				go ding.Start()
+				dingMap[d.Name] = ding
+			}
 		}
-	}
 
-	go cleanAlarmInfo()
+	}
 
 	engine.POST("/push", func(c echo.Context) error {
 		var buf bytes.Buffer
 		defer c.Request().Body.Close()
 		io.Copy(&buf, c.Request().Body)
 		log.Debug(buf.String())
-
-		matchCount := checkLogMessage(cfg, buf.String())
-		return c.String(http.StatusOK, fmt.Sprint(matchCount))
+		logData, err := convertMessageToData(cfg, buf.String())
+		errors.Panic(err)
+		send(cfg, logData)
+		return c.String(http.StatusOK, "")
 	})
 	engine.Server.Addr = cfg.Address
+	log.Info("listen on ", cfg.Address)
 	gracehttp.Serve(engine.Server)
 }
 
-// 检查log信息是否匹配
-func checkLogMessage(cfg *config.Config, message string) uint64 {
+// 将 message 转换成对象
+func convertMessageToData(cfg *config.Config, message string) (*logstash.LogData, error) {
 	var logData logstash.LogData
 	if err := json.Unmarshal([]byte(message), &logData); err != nil {
 		log.Error(err)
-		return 0
+		return nil, err
 	}
 
 	logData.Timestamp = logData.Timestamp.Add(time.Hour * time.Duration(cfg.TimeZone))
+	return &logData, nil
+}
 
-	// 检查每个filter
-	for _, v := range cfg.Filters {
-		if v.Level != strings.ToUpper(logData.Level) {
-			return 0
-		}
+// 检查log信息是否匹配
+func send(cfg *config.Config, logData *logstash.LogData) {
 
-		dingTags := make([]string, 0, 10)
-		// 检查tag
-		count := 0
-		size := len(v.Tags)
-		for _, t := range v.Tags {
-			for _, lt := range logData.Tags {
-				if t == lt {
-					count++
-					dingTags = append(dingTags, t)
-					if count == size {
-
-						// 发送邮件
-						now := time.Now()
-						key := base64.RawStdEncoding.EncodeToString([]byte(fmt.Sprint(now.Day()) + logData.Host + "\n" + logData.Source + "\n" + getMatchMessage(cfg, logData.Message)))
-
-						count := alarmInfo.GetAndAdd(key)
-						if count >= cfg.MaxPerDay {
-							log.Warn("max per day reached，not send email， max count ：", cfg.MaxPerDay, " current count：", count)
-							return count
-						}
-
-						for _, ig := range v.Ignores {
-							if strings.Contains(message, ig) {
-								return count
-							}
-						}
-
-						// 发送钉钉
-						go sendDing(v, logData)
-
-						if cfg.IsSendEmail {
-							go sendEmail(v, logData)
-						}
-						return count
-					}
-				}
-			}
-		}
-	}
-	return 0
+	matchFilter := cfg.GetFilter(logData.Tags, logData.Level)
+	go sendDing(matchFilter, *logData)
+	go sendEmail(matchFilter, *logData)
 }
 
 func getDing(filter *config.Filter) *dinghook.DingQueue {
 	return dingMap[strings.Join(filter.Tags, splitChar)]
 }
 
-func sendDing(filter *config.Filter, logData logstash.LogData) {
-	msg := logData.Message
-	if strings.Contains(msg, "mongodb") || strings.Contains(msg, "AmqpConnectException") {
-		idx := strings.Index(msg, " at")
+func sendDing(filters []*config.Filter, logData logstash.LogData) {
+	for _, filter := range filters {
+		for _, d := range filter.Dings {
+			if !d.Enable {
+				log.Debug("ding ", d.Name, " is disabled")
+				continue
+			}
 
-		if idx > 0 {
-			msg = msg[:idx]
-		}
-		title := logData.Source[strings.Index(logData.Source, logPathPrefix)+logPathPrefixLen : strings.Index(logData.Source, ".")]
-		ding := getDing(filter)
-		if ding != nil {
-			ding.PushMessage(dinghook.SimpleMessage{Title: title, Content: title + " \n\n " + msg})
+			msg := logData.Message
+			for _, r := range d.MatchRegex {
+				if r.MatchString(msg) {
+					idx := strings.Index(msg, " at")
+
+					if idx > 0 {
+						msg = msg[:idx]
+					}
+					title := logData.Source[strings.Index(logData.Source, logPathPrefix)+logPathPrefixLen : strings.Index(logData.Source, ".")]
+					ding := getDing(filter)
+					if ding != nil {
+						ding.PushMessage(dinghook.SimpleMessage{Title: title, Content: title + " \n\n " + msg})
+					}
+				}
+			}
+
 		}
 	}
+
 }
 
-func cleanAlarmInfo() {
-	t := time.NewTicker(time.Minute)
-	for {
-		select {
-		case now := <-t.C:
-			if now.Day() != lastDay {
-				log.Info("clean old alarm message info")
-				lastDay = now.Day()
+func sendEmail(filters []*config.Filter, logData logstash.LogData) {
+	for _, filter := range filters {
 
-				log.Info("old alarm Info:")
-				for k, v := range alarmInfo.GetValues() {
-					bs, _ := base64.StdEncoding.DecodeString(k)
-					log.Info(string(bs), " count: ", v)
-				}
-				alarmInfo.Reset()
+		title := logData.Source[strings.Index(logData.Source, logPathPrefix)+logPathPrefixLen : strings.Index(logData.Source, ".")]
+
+		subject := fmt.Sprintf("❌ %v\t time: %v", title, logData.Timestamp)
+		mailInfo := filter.GetMail()
+		sendSuccess := false
+		ding := getDing(filter)
+		var errMsgs string
+		for _, fm := range filter.Mails { // 如果失败，循环发送，直到配置的所有邮箱有成功的，或者全部失败
+			if !fm.Enable {
+				continue
+			}
+
+			email := mail.Email{MailInfo: mailInfo, Subject: subject, Data: logData, MailTemplate: "log.html", ToPerson: fm.ToPersons}
+			if err := mail.SendEmail(email); err != nil {
+				errMsg := fmt.Sprint("send email error:", err, "\nsender:", filter.GetMail().Sender, "\nto:", fm.ToPersons)
+				errMsgs += errMsg + "\n"
+				log.Error(errMsg)
+				mailInfo = filter.GetNextMail()
+			} else {
+				sendSuccess = true
+				log.Info("send email success")
+				break
 			}
 		}
-	}
-}
 
-func sendEmail(filter *config.Filter, logData logstash.LogData) {
-
-	title := logData.Source[strings.Index(logData.Source, logPathPrefix)+logPathPrefixLen : strings.Index(logData.Source, ".")]
-
-	subject := fmt.Sprintf("❌ %v\t time: %v", title, logData.Timestamp)
-	mailInfo := filter.GetMail()
-	sendSuccess := false
-	ding := getDing(filter)
-	for range filter.Mails { // 如果失败，循环发送，直到配置的所有邮箱有成功的，或者全部失败
-		email := mail.Email{MailInfo: mailInfo, Subject: subject, Data: logData, MailTemplate: "log.html", ToPerson: filter.ToPerson}
-		if err := mail.SendEmail(email); err != nil {
-			errMsg := fmt.Sprint("send email error:", err, "\nto:", filter.ToPerson)
-			log.Error(errMsg)
-			mailInfo = filter.GetNextMail()
-		} else {
-			sendSuccess = true
-			log.Info("send email success")
-			break
+		if !sendSuccess && ding != nil {
+			ding := getDing(filter)
+			senders := ""
+			for _, m := range filter.Mails {
+				senders += m.Sender + " "
+			}
+			ding.Push(fmt.Sprintf("所有 mail 都发送失败，，失败信息: \n%v,请检查发送频率或者邮件信息，下面是发送失败的错误：\n %v", errMsgs, logData.Message))
 		}
-	}
 
-	if !sendSuccess && ding != nil {
-		ding := getDing(filter)
-		ding.Push("所有 mail 都发送失败，请检查发送频率或者邮件信息，下面是发送失败的错误：\n" + logData.Message)
 	}
-
 }
-
-func getMatchMessage(cfg *config.Config, message string) string {
-	str := cfg.MatchRegex.FindString(message)
-	if cfg.Negate {
-		return strings.Replace(message, str, "", 1)
-	}
-
-	return str
-}
-
-var s = `\d{4}(\-\d{2}){2}T(\d{2}:){2}\d{2}\.\d{3}\+\d+\s+\w+\s+\[[\w\-]+\]\s+`

@@ -1,28 +1,37 @@
 {
-    "address": "0.0.0.0:5678",
-    "logLevel": "DEBUG",
-    "maxPerDay": 3,
-    "match": "\\d{4}(\\-\\d{2}){2}T(\\d{2}:){2}\\d{2}\\.\\d{3}\\+\\d+\\s+\\w+\\s+\\[[\\w\\-]+\\]\\s+",
-    "negate": true,
-    "sendEmail": false,
-    "timeZone": 8,
-    "filters": [{
-        "name": "unique1",
-        "level": "ERROR",
-        "tags": ["taga"],
-        "ignores": ["mx.smartmatrix.common.core.exception", "m.s.i.s.i."],
-        "ding": "",
-        "toPerson": ["xx@xx.com"],
-        "mails": [{
-            "smtp": "smtp.xxx.com",
-            "port": 25,
-            "sender": "monitor@xxx.com",
-            "password": ""
-        }]
-    }, {
-        "name": "unique2",
-        "level": "ERROR",
-        "tags": ["tagb"],
-        "toPerson": ["xx.@xx..com"]
-    }]
+  "address": "0.0.0.0:5678",
+  "logLevel": "DEBUG",
+  "timeZone": 8,
+  "filters": [
+    {
+      "levels": ["ERROR"],
+      "tags": [
+        "taga"
+      ],
+      "ignoreContains": [
+        "ignoreContainsChars"
+      ],
+      "dings": [
+        {
+          "token": "",
+          "enable": true,
+          "matchRegex": [""]
+        }
+      ],
+
+      "mails": [
+        {
+          "enable": true,
+          "matchRegex": "",
+          "smtp": "smtp.xxx.com",
+          "port": 25,
+          "sender": "monitor@xxx.com",
+          "password": "",
+          "toPerson": [
+            "xx@xx.com"
+          ]
+        }
+      ]
+    }
+  ]
 }

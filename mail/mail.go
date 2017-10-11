@@ -4,30 +4,23 @@ import (
 	"bytes"
 	"html/template"
 
+	"github.com/sdvdxl/logstash-http-push/config"
 	"github.com/sdvdxl/logstash-http-push/log"
 	"gopkg.in/gomail.v2"
 )
 
 // Email 邮件信息
 type Email struct {
-	MailInfo     MailInfo
+	MailInfo     config.MailInfo
 	ToPerson     []string
 	Subject      string
 	MailTemplate string
 	Data         interface{}
 }
 
-// MailInfo 邮件信息
-type MailInfo struct {
-	SMTP     string `json:"smtp"`
-	Port     int    `json:"port"`
-	Sender   string `json:"sender"`
-	Password string `json:"password"`
-}
-
 // SendEmail 发送邮件
 func SendEmail(email Email) error {
-	log.Info("sendding mail...")
+	log.Info("sending mail to:", email.ToPerson)
 	mailInfo := email.MailInfo
 	m := gomail.NewMessage()
 	m.SetHeader("From", mailInfo.Sender)
