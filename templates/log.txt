@@ -1,0 +1,6 @@
+Level: {{.Level}}
+Timestamp: {{.Timestamp}}
+Host: {{.Host}}
+Tags: {{.Tags}}
+LogFile: {{.Source}}
+LogMessage: {{.Message}}

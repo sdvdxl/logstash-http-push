@@ -207,12 +207,12 @@ func sendDing(filters []*config.Filter, logData logstash.LogData) {
 			if idx > 0 {
 				msg = msg[:idx]
 			}
-			title := logData.Source[strings.Index(logData.Source, logPathPrefix)+logPathPrefixLen : strings.Index(logData.Source, ".")]
+			title := logData.Source[strings.Index(logData.Source, logPathPrefix)+logPathPrefixLen: strings.Index(logData.Source, ".")]
 
 			for _, d := range filter.Ding.Senders {
 				ding := dingMap[d.Token]
 				if ding != nil {
-					ding.PushMessage(dinghook.SimpleMessage{Title: title, Content: getMessage(logData)})
+					ding.PushMessage(dinghook.SimpleMessage{Title: title, Content: getMessage(logData, false)})
 				}
 			}
 
@@ -229,7 +229,7 @@ func sendEmail(filters []*config.Filter, logData logstash.LogData) {
 		}
 
 		// 如果 ticker 不是 nil，则定时发送
-		message := getMessage(logData)
+		message := getMessage(logData, true)
 		func() {
 			defer filter.Mail.Lock.Unlock()
 			filter.Mail.Lock.Lock()
@@ -239,8 +239,12 @@ func sendEmail(filters []*config.Filter, logData logstash.LogData) {
 	}
 }
 
-func getMessage(logdata logstash.LogData) string {
-	tmpl, err := template.ParseFiles("templates/log.html")
+func getMessage(logdata logstash.LogData, isHtml bool) string {
+	file := "templates/log.html"
+	if !isHtml {
+		file = "templates/log.txt"
+	}
+	tmpl, err := template.ParseFiles(file)
 	errors.Panic(err)
 
 	var contents bytes.Buffer
