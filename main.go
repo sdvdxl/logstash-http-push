@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"html/template"
+
 	"github.com/facebookgo/grace/gracehttp"
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
@@ -20,7 +22,6 @@ import (
 	"github.com/sdvdxl/logstash-http-push/log"
 	"github.com/sdvdxl/logstash-http-push/logstash"
 	"github.com/sdvdxl/logstash-http-push/mail"
-	"html/template"
 )
 
 const (
@@ -107,7 +108,7 @@ func main() {
 						}
 
 						sendSuccess := false
-						ding := getDing(filter)
+
 						var message, errMsgs string
 						for range filter.Mail.Senders { // 如果失败，循环发送，直到配置的所有邮箱有成功的，或者全部失败
 							title := fmt.Sprint(filter.Tags, filter.Mail.Duration, "秒内邮件聚合【", len(filter.Mail.MailMessages), "】Exceptions")
@@ -129,13 +130,12 @@ func main() {
 							}
 						}
 
-						if !sendSuccess && ding != nil {
-							ding := getDing(filter)
+						if !sendSuccess {
 							senders := ""
 							for _, m := range filter.Mail.Senders {
 								senders += m.Sender + " "
 							}
-							ding.Push(fmt.Sprintf("所有 mail 都发送失败，，失败信息: \n\n%v,请检查发送频率或者邮件信息，下面是发送失败的错误：\n\n %v", errMsgs, message))
+							sendEmailErrorsToDings(filter, fmt.Sprintf("所有 mail 都发送失败，，失败信息: \n\n%v,请检查发送频率或者邮件信息，下面是发送失败的错误：\n\n %v", errMsgs, message))
 						}
 					}()
 				}
@@ -184,8 +184,14 @@ func send(cfg *config.Config, logData *logstash.LogData) {
 	go sendEmail(matchFilter, *logData)
 }
 
-func getDing(filter *config.Filter) *dinghook.DingQueue {
-	return dingMap[filter.Ding.Name]
+func sendEmailErrorsToDings(filter *config.Filter, msg string) {
+	for _, d := range filter.Ding.Senders {
+		ding := dingMap[d.Token]
+		if ding == nil {
+			continue
+		}
+		ding.Push(msg)
+	}
 }
 
 func sendDing(filters []*config.Filter, logData logstash.LogData) {
@@ -206,9 +212,7 @@ func sendDing(filters []*config.Filter, logData logstash.LogData) {
 			for _, d := range filter.Ding.Senders {
 				ding := dingMap[d.Token]
 				if ding != nil {
-
 					ding.PushMessage(dinghook.SimpleMessage{Title: title, Content: getMessage(logData)})
-
 				}
 			}
 
