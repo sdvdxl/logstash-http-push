@@ -241,7 +241,13 @@ func getMessage(logdata logstash.LogData, isHtml bool) string {
 	file := "templates/log.html"
 	if !isHtml {
 		file = "templates/log.txt"
+		idx := strings.Index(logdata.Message, " at")
+
+		if idx > 0 {
+			logdata.Message = logdata.Message[:idx]
+		}
 	}
+
 	tmpl, err := template.ParseFiles(file)
 	errors.Panic(err)
 
