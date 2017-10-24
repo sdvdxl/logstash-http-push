@@ -13,7 +13,6 @@ import (
 
 	"html/template"
 
-	"github.com/facebookgo/grace/gracehttp"
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
 	"github.com/sdvdxl/dinghook"
@@ -154,9 +153,8 @@ func main() {
 		send(cfg, logData)
 		return c.String(http.StatusOK, "")
 	})
-	engine.Server.Addr = cfg.Address
-	log.Info("listen on ", cfg.Address)
-	gracehttp.Serve(engine.Server)
+
+	errors.Panic(engine.Start(cfg.Address))
 }
 
 // 将 message 转换成对象
@@ -207,7 +205,7 @@ func sendDing(filters []*config.Filter, logData logstash.LogData) {
 			if idx > 0 {
 				msg = msg[:idx]
 			}
-			title := logData.Source[strings.Index(logData.Source, logPathPrefix)+logPathPrefixLen: strings.Index(logData.Source, ".")]
+			title := logData.Source[strings.Index(logData.Source, logPathPrefix)+logPathPrefixLen : strings.Index(logData.Source, ".")]
 
 			for _, d := range filter.Ding.Senders {
 				ding := dingMap[d.Token]
