@@ -30,7 +30,7 @@ const (
 )
 
 var (
-	dingMap map[string](*dinghook.DingQueue)
+	dingMap map[string]*dinghook.DingQueue
 )
 
 // AlarmInfo 告警记录
@@ -69,10 +69,9 @@ func (a *AlarmInfo) Reset() {
 }
 
 func init() {
-	dingMap = make(map[string](*dinghook.DingQueue))
+	dingMap = make(map[string]*dinghook.DingQueue)
 }
 
-// TODO graceful shutdown ，send rest mails
 func main() {
 	engine := echo.New()
 	engine.Use(middleware.Logger())
@@ -118,8 +117,8 @@ func main() {
 
 							email := mail.Email{MailSender: mailSender, Subject: title, Message: message, ToPerson: filter.Mail.ToPersons}
 							if err := mail.SendEmail(email); err != nil {
-								errMsg := fmt.Sprint("send email error:", err, "\nsender:", filter.GetMail().Sender, "\nto:", filter.Mail.ToPersons)
-								errMsgs += errMsg + "\n"
+								errMsg := fmt.Sprint("send email error:", err, "\nsender:", filter.GetMail().Sender, "\nTo:", filter.Mail.ToPersons)
+								errMsgs += errMsg + "\n\n\n"
 								log.Error(errMsg)
 								mailSender = filter.GetNextMail()
 							} else {
@@ -134,7 +133,9 @@ func main() {
 							for _, m := range filter.Mail.Senders {
 								senders += m.Sender + " "
 							}
-							sendEmailErrorsToDings(filter, fmt.Sprintf("所有 mail 都发送失败，，失败信息: \n\n%v,请检查发送频率或者邮件信息，下面是发送失败的错误：\n\n %v", errMsgs, message))
+							messageToDing := fmt.Sprintf("所有 mail 都发送失败，失败信息: \n\n%v,请检查发送频率或者邮件信息，下面是发送失败的错误：\n\n %v", errMsgs, message)
+							log.Debug("error sending email, message", messageToDing)
+							sendEmailErrorsToDings(filter, messageToDing)
 						}
 					}()
 				}
@@ -205,7 +206,7 @@ func sendDing(filters []*config.Filter, logData logstash.LogData) {
 			if idx > 0 {
 				msg = msg[:idx]
 			}
-			title := logData.Source[strings.Index(logData.Source, logPathPrefix)+logPathPrefixLen : strings.Index(logData.Source, ".")]
+			title := logData.Source[strings.Index(logData.Source, logPathPrefix)+logPathPrefixLen: strings.Index(logData.Source, ".")]
 
 			for _, d := range filter.Ding.Senders {
 				ding := dingMap[d.Token]
