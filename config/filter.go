@@ -3,7 +3,7 @@ package config
 // Filter log 过滤
 type Filter struct {
 	Name           string   `json:"-" mapstructure:"-"`
-	IgnoreContains []string `json:"ignoreContains" mapstructure:"-"` // 忽略的列表，普通字符串，如果包含其中一个则忽略，or 的关系
+	IgnoreContains []string `json:"ignoreContains" mapstructure:"ignoreContains"` // 忽略的列表，普通字符串，如果包含其中一个则忽略，or 的关系
 	lastMailIndex  int
 	Levels         []string `json:"levels" mapstructure:"levels"`
 	Tags           []string `json:"tags" mapstructure:"tags"`

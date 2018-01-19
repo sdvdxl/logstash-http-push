@@ -179,8 +179,25 @@ func send(cfg *config.Config, logData *logstash.LogData) {
 		return
 	}
 
-	go sendDing(matchFilter, *logData)
-	go sendEmail(matchFilter, *logData)
+	fmfs := make([]*config.Filter, 0, len(matchFilter))
+
+	for _, f := range matchFilter {
+		found := false
+		for _, i := range f.IgnoreContains {
+			if strings.Contains(logData.Message, i) {
+				found = true
+				log.Debug("match " + i + " ignore message:" + logData.Message)
+				break
+			}
+		}
+
+		if !found {
+			fmfs = append(fmfs, f)
+		}
+	}
+
+	go sendDing(fmfs, *logData)
+	go sendEmail(fmfs, *logData)
 }
 
 func sendEmailErrorsToDings(filter *config.Filter, msg string) {
@@ -206,7 +223,7 @@ func sendDing(filters []*config.Filter, logData logstash.LogData) {
 			if idx > 0 {
 				msg = msg[:idx]
 			}
-			title := logData.Source[strings.Index(logData.Source, logPathPrefix)+logPathPrefixLen: strings.Index(logData.Source, ".")]
+			title := logData.Source[strings.Index(logData.Source, logPathPrefix)+logPathPrefixLen : strings.Index(logData.Source, ".")]
 
 			for _, d := range filter.Ding.Senders {
 				ding := dingMap[d.Token]
