@@ -8,13 +8,14 @@ import (
 	"log"
 
 	"fmt"
-	"github.com/fsnotify/fsnotify"
-	"github.com/sdvdxl/go-tools/encrypt"
-	"github.com/spf13/viper"
 	"regexp"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/fsnotify/fsnotify"
+	"github.com/sdvdxl/go-tools/encrypt"
+	"github.com/spf13/viper"
 )
 
 const (
@@ -39,11 +40,13 @@ func Get() *Config {
 
 // Config 配置文件
 type Config struct {
-	Address   string             `json:"address"` //web 服务地址 ":5678"
-	LogLevel  string             `json:"logLevel"`
-	Filters   []*Filter          `json:"filters"`
-	filterMap map[string]*Filter `json:"-"`
-	TimeZone  int8               `json:"timeZone"` //时区，如果时间有偏移则加上时区，否则设置为0即可
+	MaxMailSize int                `json:"maxMailSize"`
+	DC          string             `json:"dc"`      // 数据中心
+	Address     string             `json:"address"` //web 服务地址 ":5678"
+	LogLevel    string             `json:"logLevel"`
+	Filters     []*Filter          `json:"filters"`
+	filterMap   map[string]*Filter `json:"-"`
+	TimeZone    int8               `json:"timeZone"` //时区，如果时间有偏移则加上时区，否则设置为0即可
 }
 
 const filterKeyPrefix = "filter-"

@@ -1,37 +1,33 @@
 {
-  "address": "0.0.0.0:5678",
-  "logLevel": "DEBUG",
-  "timeZone": 8,
-  "filters": [
-    {
-      "levels": ["ERROR"],
-      "tags": [
-        "taga"
-      ],
-      "ignoreContains": [
-        "ignoreContainsChars"
-      ],
-      "dings": [
-        {
-          "token": "",
-          "enable": true,
-          "matchRegex": [""]
-        }
-      ],
+    "dc": "FRA",
+    "maxMailSize": 50,
+    "address": "0.0.0.0:5678",
+    "logLevel": "DEBUG",
+    "timeZone": 8,
+    "filters": [{
+        "levels": ["ERROR"],
+        "tags": [
+            "taga"
+        ],
+        "ignoreContains": [
+            "ignoreContainsChars"
+        ],
+        "dings": [{
+            "token": "",
+            "enable": true,
+            "matchRegex": [""]
+        }],
 
-      "mails": [
-        {
-          "enable": true,
-          "matchRegex": "",
-          "smtp": "smtp.xxx.com",
-          "port": 25,
-          "sender": "monitor@xxx.com",
-          "password": "",
-          "toPerson": [
-            "xx@xx.com"
-          ]
-        }
-      ]
-    }
-  ]
+        "mails": [{
+            "enable": true,
+            "matchRegex": "",
+            "smtp": "smtp.xxx.com",
+            "port": 25,
+            "sender": "monitor@xxx.com",
+            "password": "",
+            "toPerson": [
+                "xx@xx.com"
+            ]
+        }]
+    }]
 }

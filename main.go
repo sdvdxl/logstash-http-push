@@ -107,12 +107,22 @@ func main() {
 
 						sendSuccess := false
 
+						exCount := len(filter.Mail.MailMessages)
+						ignoreCount := exCount - Min(exCount, cfg.MaxMailSize)
+						var ignoreMsg string
+						if ignoreCount > 0 {
+							ignoreMsg = fmt.Sprint(" ignore: ", ignoreCount)
+						}
 						var message, errMsgs string
 						for range filter.Mail.Senders { // 如果失败，循环发送，直到配置的所有邮箱有成功的，或者全部失败
-							title := fmt.Sprint(filter.Tags, filter.Mail.Duration, "秒内邮件聚合【", len(filter.Mail.MailMessages), "】Exceptions")
+							title := fmt.Sprint(filter.Tags, cfg.DC, filter.Mail.Duration, "秒聚合【", exCount, "】", ignoreMsg)
 
 							mailSender := filter.GetMail()
-							message = strings.Join(filter.Mail.MailMessages, "<br><br><hr>")
+							sendMailMsgs := filter.Mail.MailMessages
+							if exCount > cfg.MaxMailSize {
+								sendMailMsgs = filter.Mail.MailMessages[:cfg.MaxMailSize]
+							}
+							message = strings.Join(sendMailMsgs, "<br><br><hr>")
 							filter.Mail.MailMessages = make([]string, 0, 10)
 
 							email := mail.Email{MailSender: mailSender, Subject: title, Message: message, ToPerson: filter.Mail.ToPersons}
@@ -132,6 +142,10 @@ func main() {
 							senders := ""
 							for _, m := range filter.Mail.Senders {
 								senders += m.Sender + " "
+							}
+
+							if len(message) > 15000 {
+								message = message[:15000]
 							}
 							messageToDing := fmt.Sprintf("所有 mail 都发送失败，失败信息: \n\n%v,请检查发送频率或者邮件信息，下面是发送失败的错误：\n\n %v", errMsgs, message)
 							log.Debug("error sending email, message", messageToDing)
@@ -272,4 +286,11 @@ func getMessage(logdata logstash.LogData, isHtml bool) string {
 	var contents bytes.Buffer
 	errors.Panic(tmpl.Execute(&contents, logdata))
 	return contents.String()
+}
+
+func Min(x, y int) int {
+	if x < y {
+		return x
+	}
+	return y
 }
