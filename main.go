@@ -115,7 +115,7 @@ func main() {
 						}
 						var message, errMsgs string
 						for range filter.Mail.Senders { // 如果失败，循环发送，直到配置的所有邮箱有成功的，或者全部失败
-							title := fmt.Sprint(filter.Tags, cfg.DC, filter.Mail.Duration, "秒聚合【", exCount, "】", ignoreMsg)
+							title := fmt.Sprint("[", cfg.DC, "] ", filter.Tags, filter.Mail.Duration, "秒聚合 [", exCount, "]", ignoreMsg)
 
 							mailSender := filter.GetMail()
 							sendMailMsgs := filter.Mail.MailMessages
