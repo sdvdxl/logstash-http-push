@@ -147,7 +147,9 @@ func main() {
 							if len(message) > 15000 {
 								message = message[:15000]
 							}
-							messageToDing := fmt.Sprintf("所有 mail 都发送失败，失败信息: \n\n%v,请检查发送频率或者邮件信息，下面是发送失败的错误：\n\n %v", errMsgs, message)
+							messageToDing := fmt.Sprint("[", cfg.DC, "] [",
+								filter.Tags, "] \n所有 mail 都发送失败,请检查发送频率或者邮件信息，失败信息:\n",
+								errMsgs, "异常信息：\n", message)
 							log.Error("error sending email, message", messageToDing)
 							sendEmailErrorsToDings(filter, messageToDing)
 						}
