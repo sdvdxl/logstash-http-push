@@ -114,16 +114,17 @@ func main() {
 							ignoreMsg = fmt.Sprint(" ignore: ", ignoreCount)
 						}
 						var message, errMsgs string
-						for range filter.Mail.Senders { // 如果失败，循环发送，直到配置的所有邮箱有成功的，或者全部失败
-							title := fmt.Sprint("[", cfg.DC, "] ", filter.Tags, filter.Mail.Duration, "秒聚合 [", exCount, "]", ignoreMsg)
+						title := fmt.Sprint("[", cfg.DC, "] ", filter.Tags, filter.Mail.Duration, "秒聚合 [", exCount, "]", ignoreMsg)
 
+						sendMailMsgs := filter.Mail.MailMessages
+						if exCount > cfg.MaxMailSize {
+							sendMailMsgs = filter.Mail.MailMessages[:cfg.MaxMailSize]
+						}
+
+						message = strings.Join(sendMailMsgs, "<br><br><hr>")
+						filter.Mail.MailMessages = make([]string, 0, 10)
+						for range filter.Mail.Senders { // 如果失败，循环发送，直到配置的所有邮箱有成功的，或者全部失败
 							mailSender := filter.GetMail()
-							sendMailMsgs := filter.Mail.MailMessages
-							if exCount > cfg.MaxMailSize {
-								sendMailMsgs = filter.Mail.MailMessages[:cfg.MaxMailSize]
-							}
-							message = strings.Join(sendMailMsgs, "<br><br><hr>")
-							filter.Mail.MailMessages = make([]string, 0, 10)
 
 							email := mail.Email{MailSender: mailSender, Subject: title, Message: message, ToPerson: filter.Mail.ToPersons}
 							if err := mail.SendEmail(email); err != nil {
