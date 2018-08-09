@@ -2,9 +2,10 @@ package main
 
 import (
 	"bytes"
+
 	"encoding/json"
+
 	"fmt"
-	"io"
 	"net/http"
 
 	"strings"
@@ -21,6 +22,7 @@ import (
 	"github.com/sdvdxl/logstash-http-push/log"
 	"github.com/sdvdxl/logstash-http-push/logstash"
 	"github.com/sdvdxl/logstash-http-push/mail"
+	"io/ioutil"
 )
 
 const (
@@ -162,13 +164,14 @@ func main() {
 	}
 
 	engine.POST("/push", func(c echo.Context) error {
-		var buf bytes.Buffer
 		defer c.Request().Body.Close()
-		io.Copy(&buf, c.Request().Body)
-		log.Debug(buf.String())
-		logData, err := convertMessageToData(cfg, buf.String())
+		body, err := ioutil.ReadAll(c.Request().Body)
+
+		logDatas, err := convertMessageToDataArray(cfg, body)
 		errors.Panic(err)
-		send(cfg, logData)
+		for i := range logDatas {
+			send(cfg, &logDatas[i])
+		}
 		return c.String(http.StatusOK, "")
 	})
 
@@ -176,15 +179,29 @@ func main() {
 }
 
 // 将 message 转换成对象
-func convertMessageToData(cfg *config.Config, message string) (*logstash.LogData, error) {
-	var logData logstash.LogData
-	if err := json.Unmarshal([]byte(message), &logData); err != nil {
-		log.Error(err)
-		return nil, err
+func convertMessageToDataArray(cfg *config.Config, message []byte) ([]logstash.LogData, error) {
+	var logDatas []logstash.LogData
+	if strings.HasPrefix(string(message), "[") {
+		log.Info("logstash pushed array message")
+		if err := json.Unmarshal(message, &logDatas); err != nil {
+			log.Error(err)
+			return nil, err
+		}
+	} else {
+		var logData logstash.LogData
+		if err := json.Unmarshal(message, &logData); err != nil {
+			log.Error(err)
+			return nil, err
+		} else {
+			logDatas = []logstash.LogData{logData}
+		}
 	}
 
-	logData.Timestamp = logData.Timestamp.Add(time.Hour * time.Duration(cfg.TimeZone))
-	return &logData, nil
+	for i := range logDatas {
+		logDatas[i].Timestamp = logDatas[i].Timestamp.Add(time.Hour * time.Duration(cfg.TimeZone))
+
+	}
+	return logDatas, nil
 }
 
 // 检查log信息是否匹配

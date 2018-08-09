@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	flag     = l.Lshortfile | l.Ldate | l.Ltime
+	flag     = l.Llongfile | l.Ldate | l.Ltime
 	fatalLog = l.New(os.Stderr, "FATAL\t", flag)
 	errLog   = l.New(os.Stderr, "ERROR\t", flag)
 	warnLog  = l.New(os.Stdout, "WARN \t", flag)

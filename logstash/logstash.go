@@ -11,6 +11,10 @@ type LogData struct {
 	Source    string    `json:"source"`
 	Message   string    `json:"message"`
 	Timestamp time.Time `json:"@timestamp"`
-	Host      string    `json:"host"`
+	Host      Host      `json:"host"`
 	Tags      []string  `json:"tags"`
+}
+
+type Host struct {
+	Name string `json:"name"`
 }
