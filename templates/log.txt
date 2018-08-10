@@ -1,6 +1,6 @@
 Level: {{.Level}}
 Timestamp: {{.Timestamp}}
-Host: {{.Beat}}
+Host: {{.Beat.Hostname}}  Beat.Version: {{.Beat.Version}} Beat.Name: {{.Beat.Name}}
 Tags: {{.Tags}}
 LogFile: {{.Source}}
 LogMessage: {{.Message}}
