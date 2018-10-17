@@ -14,7 +14,9 @@ type MailInfo struct {
 	ToPersons    []string     `json:"toPersons" mapstructure:"toPersons"`
 	Name         string       `json:"-" mapstructure:"-"`
 	Enable       bool         `json:"enable" mapstructure:"enable"`
-	Senders      []MailSender `json:"senders" mapstructure:"senders"`
+	// 跟现在比较，如果超过了这个时间则忽略不发送
+	IgnoreIfGtSecs int64        `json:"ignoreIfGtSecs" mapstructure:"ignoreIfGtSecs"`
+	Senders        []MailSender `json:"senders" mapstructure:"senders"`
 }
 
 type MailSender struct {

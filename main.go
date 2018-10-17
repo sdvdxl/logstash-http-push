@@ -250,6 +250,12 @@ func sendDing(filters []*config.Filter, logData logstash.LogData) {
 			log.Debug("ding ", filter.Ding.Name, " is disabled")
 			continue
 		}
+
+		if time.Now().Unix()-logData.Timestamp.Unix() > filter.Ding.IgnoreIfGtSecs {
+			log.Debug("ding message expired: ", filter.Ding.IgnoreIfGtSecs)
+			continue
+		}
+
 		msg := logData.Message
 		if filter.Ding.MatchRegex.MatchString(msg) {
 			idx := strings.Index(msg, " at")
@@ -275,6 +281,11 @@ func sendEmail(filters []*config.Filter, logData logstash.LogData) {
 	for _, filter := range filters {
 
 		if !filter.Mail.Enable {
+			continue
+		}
+
+		if time.Now().Unix()-logData.Timestamp.Unix() > filter.Ding.IgnoreIfGtSecs {
+			log.Debug("mail message expired: ", filter.Mail.IgnoreIfGtSecs)
 			continue
 		}
 
